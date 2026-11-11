@@ -2618,97 +2618,182 @@ body.ch-side-off #chListToggle { opacity: .7; }
 
 <!-- ============ GitHub Pages bridge: google.script.run over fetch ============ -->
 <style>
-/* GitHub-page connect screen. Sits above everything, including the boot overlay. */
-.gh-connect { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 20px;
+/* ---------------------------------------------------------------------------
+   GitHub page: sign-in, account menu, sharing, view-only mode (build 2026-11-20)
+   --------------------------------------------------------------------------- */
+.gh-connect { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 20px; overflow: auto;
   background: var(--bg, #0e1116); color: var(--text, #e6edf3); font-family: var(--sans, sans-serif); }
-.gh-connect[hidden] { display: none !important; }
-.gh-card { width: 100%; max-width: 460px; background: var(--panel, #161b22); border: 1px solid var(--line, #242c38);
+.gh-connect[hidden], .gh-modal[hidden], .gh-menu[hidden] { display: none !important; }
+.gh-card { width: 100%; max-width: 420px; background: var(--panel, #161b22); border: 1px solid var(--line, #242c38);
   border-radius: 12px; padding: 24px; box-shadow: 0 10px 40px rgba(0,0,0,.35); }
 .gh-card h2 { margin: 0 0 6px; font-size: 19px; }
+.gh-card h3 { margin: 22px 0 8px; font-size: 14px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted, #8b949e); }
 .gh-card p { margin: 0 0 14px; color: var(--muted, #8b949e); font-size: 13.5px; line-height: 1.45; }
 .gh-card label { display: block; font-size: 12.5px; color: var(--muted, #8b949e); margin: 12px 0 5px; }
 .gh-card input { width: 100%; box-sizing: border-box; padding: 9px 11px; border-radius: 8px; font-size: 14px;
-  border: 1px solid var(--line, #242c38); background: var(--bg, #0e1116); color: var(--text, #e6edf3); font-family: var(--mono, monospace); }
+  border: 1px solid var(--line, #242c38); background: var(--bg, #0e1116); color: var(--text, #e6edf3); font-family: inherit; }
 .gh-card input:focus { outline: 2px solid var(--accent, #3987e5); outline-offset: -1px; }
-.gh-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 18px; }
+.gh-card input[readonly] { opacity: .7; }
+.gh-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 16px; }
 .gh-btn { border: 1px solid var(--line, #242c38); background: transparent; color: var(--text, #e6edf3); padding: 9px 14px;
-  border-radius: 8px; font-size: 14px; cursor: pointer; }
+  border-radius: 8px; font-size: 14px; cursor: pointer; font-family: inherit; }
 .gh-btn.primary { background: var(--accent, #3987e5); border-color: var(--accent, #3987e5); color: #fff; font-weight: 600; }
-.gh-btn:disabled { opacity: .6; cursor: default; }
-.gh-msg { margin-top: 14px; font-size: 13px; min-height: 1em; }
+.gh-btn.sm { padding: 5px 10px; font-size: 13px; }
+.gh-btn.wide { width: 100%; }
+.gh-btn:disabled { opacity: .55; cursor: default; }
+.gh-link { background: none; border: 0; color: var(--accent, #3987e5); cursor: pointer; padding: 0; font-size: 13.5px; font-family: inherit; }
+.gh-msg { margin-top: 12px; font-size: 13px; min-height: 1em; line-height: 1.4; }
 .gh-msg.bad { color: var(--neg, #e66767); }
 .gh-msg.good { color: var(--pos, #199e70); }
+.gh-or { display: flex; align-items: center; gap: 10px; margin: 18px 0 4px; color: var(--muted, #8b949e); font-size: 12px; }
+.gh-or::before, .gh-or::after { content: ''; flex: 1; height: 1px; background: var(--line, #242c38); }
+#ghGoogle { display: flex; justify-content: center; min-height: 44px; }
+.gh-links { display: flex; justify-content: space-between; margin-top: 14px; }
+
+/* account chip + menu in the top bar */
+.gh-chip { display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--line, #242c38); background: transparent;
+  color: var(--text, #e6edf3); border-radius: 999px; padding: 4px 10px 4px 4px; cursor: pointer; font-size: 13px; font-family: inherit; }
+.gh-avatar { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--accent, #3987e5);
+  color: #fff; font-weight: 700; font-size: 12px; }
+.gh-chip .gh-badge { background: var(--neg, #e66767); color: #fff; border-radius: 999px; font-size: 11px; padding: 0 6px; }
+.gh-menu { position: fixed; z-index: 900; min-width: 240px; background: var(--panel, #161b22); border: 1px solid var(--line, #242c38);
+  border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,.4); padding: 6px; font-size: 14px; }
+.gh-menu button { display: block; width: 100%; text-align: left; background: none; border: 0; color: var(--text, #e6edf3);
+  padding: 8px 10px; border-radius: 6px; cursor: pointer; font-family: inherit; font-size: 14px; }
+.gh-menu button:hover { background: rgba(127,127,127,.12); }
+.gh-menu .gh-sep { height: 1px; background: var(--line, #242c38); margin: 6px 4px; }
+.gh-menu .gh-head { padding: 6px 10px 4px; color: var(--muted, #8b949e); font-size: 12px; }
+
+/* dialogs */
+.gh-modal { position: fixed; inset: 0; z-index: 950; background: rgba(0,0,0,.55); display: grid; place-items: start center; overflow: auto; padding: 40px 14px; }
+.gh-modal .gh-card { max-width: 560px; position: relative; }
+.gh-close { position: absolute; top: 12px; right: 12px; }
+.gh-list { border: 1px solid var(--line, #242c38); border-radius: 8px; overflow: hidden; }
+.gh-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-top: 1px solid var(--line, #242c38); font-size: 14px; }
+.gh-item:first-child { border-top: 0; }
+.gh-item .gh-name { flex: 1; min-width: 0; }
+.gh-item .gh-sub { color: var(--muted, #8b949e); font-size: 12px; }
+.gh-empty { padding: 12px; color: var(--muted, #8b949e); font-size: 13.5px; }
+.gh-pill { font-size: 12px; border-radius: 999px; padding: 2px 9px; border: 1px solid var(--line, #242c38); color: var(--muted, #8b949e); white-space: nowrap; }
+.gh-pill.approved, .gh-pill.active { color: var(--pos, #199e70); border-color: var(--pos, #199e70); }
+.gh-pill.requested, .gh-pill.pending { color: #e3b341; border-color: #e3b341; }
+.gh-pill.declined, .gh-pill.disabled { color: var(--neg, #e66767); border-color: var(--neg, #e66767); }
+
+/* view-only mode */
+.gh-viewbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 12px 18px 0; padding: 10px 14px; border-radius: 10px;
+  background: rgba(227,179,65,.12); border: 1px solid #e3b341; color: var(--text, #e6edf3); font-size: 14px; }
+.gh-viewbar b { color: #e3b341; }
+.gh-viewbar .gh-btn { margin-left: auto; }
+body.ot-viewer .group[data-group="trading"], body.ot-viewer .group[data-group="goals"],
+body.ot-viewer .group[data-group="library"], body.ot-viewer .group[data-group="tools"],
+body.ot-viewer .tab[data-view="practice"],
+body.ot-viewer .rowbtn, body.ot-viewer .tile-tools, body.ot-viewer .tile-remove,
+body.ot-viewer [title="Remove from the dashboard"], body.ot-viewer [title^="Edit this chart"],
+body.ot-viewer #btnSaveView, body.ot-viewer #btnNewChart, body.ot-viewer #btnNewPosition,
+body.ot-viewer #btnBringMarks, body.ot-viewer #btnDismissMarks, body.ot-viewer #btnPendingImport,
+body.ot-viewer #btnPendingShow, body.ot-viewer #btnGoImport { display: none !important; }
+@media (max-width: 760px) {
+  .gh-chip-name { display: none; }
+  .gh-chip { position: fixed; top: 7px; right: 8px; z-index: 60; padding: 3px; background: var(--panel, #161b22); }
+  #groups { padding-right: 46px; }
+  .gh-viewbar { margin: 8px 10px 0; font-size: 13px; }
+}
+body.ot-viewer input.cell-edit { pointer-events: none; border-color: transparent !important; background: transparent !important; }
 </style>
 <script>
 /*
- * GitHub Pages bridge (build 2026-11-19).
+ * GitHub Pages bridge (build 2026-11-20).
  *
- * On Apps Script, google.script.run carries every call to Code.gs. Here there
- * is no Apps Script around the page, so this defines a google.script.run that
- * does the same job over fetch: POST { fn, args, key } to the data service
- * (the Apps Script web app deployed with access "Anyone") and hand the reply
- * to the same success / failure handlers. Everything else in the page is
- * unchanged — rpc() and write() never know the difference.
+ * On Apps Script, google.script.run carries every call to Code.gs. Here this
+ * defines a google.script.run that does the same over fetch: POST
+ * { fn, args, token, as } to the data service (the Apps Script web app,
+ * access "Anyone") and hand the reply to the same success / failure
+ * handlers. rpc() and write() never know the difference.
  *
- * The data service address and passcode live in this browser's localStorage
- * (key 'otConnect'), never in the repo. First visit, a wrong passcode, or
- * #connect in the address shows the connect screen.
+ *   token  the signed-in person's session (localStorage otSession)
+ *   as     whose book to open when viewing someone else's (otViewAs)
+ *
+ * The server decides everything that matters — which workbook, whether a
+ * viewer may call a function — so this file only arranges the screen.
  *
  * Content-Type text/plain keeps the POST a "simple" request: Apps Script does
  * not answer CORS preflights, and its reply (after a redirect to
  * script.googleusercontent.com) carries Access-Control-Allow-Origin: *.
  */
 (function () {
-  var STORE = 'otConnect';
+  var EXEC = 'https://script.google.com/macros/s/AKfycbyK_WjZWNxxIINjAtFSRTn_nBctbH0WyYM8kqG0Sazw-T7aFAhhYr37yLV5QVboFJ7dqA/exec';
+  if (window.OT_EXEC) EXEC = window.OT_EXEC;   // the test harness points this at its fake
+  var SKEY = 'otSession', VKEY = 'otViewAs', LKEY = 'otLastUid';
 
-  function load() {
-    try { var c = JSON.parse(localStorage.getItem(STORE) || 'null'); return c && c.url && c.key ? c : null; }
-    catch (e) { return null; }
-  }
-  function save(c) { try { localStorage.setItem(STORE, JSON.stringify(c)); } catch (e) {} }
-  function forget() { try { localStorage.removeItem(STORE); } catch (e) {} }
+  /* What a viewer's page may ask for; screen preferences are answered here and never sent. */
+  var VIEW_OK = { ping: 1, bootstrap: 1, fetchReport: 1, fetchAggregate: 1, fetchAggregates: 1, fetchYearOverYear: 1,
+    drillDown: 1, getPosition: 1, getTradeSequence: 1, getPriceStatus: 1 };
+  var VIEW_NOOP = { saveUiState: 1, saveSettings: 1, saveView: 1, deleteView: 1, setDefaultView: 1, saveCustomChart: 1,
+    deleteCustomChart: 1, rebuildViewsIfDirty: 1 };
+  var VIEW_TABS = { dashboard: 1, trades: 1, viewer: 1 };
+  var VIEW_ONLY_MSG = 'View only — this is not your account.';
 
-  function cleanUrl(u) {
-    u = String(u || '').trim();
-    var m = /^https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]+\/(exec|dev)/.exec(u);
-    return m ? m[0] : u;
-  }
+  function getJson(k) { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
+  function setJson(k, v) { try { if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
 
-  /* One call to the data service. Resolves with the function's return value. */
-  function post(cfg, fn, args) {
-    return fetch(cfg.url, {
+  var session = getJson(SKEY);
+  if (!session || !session.token) session = null;
+  var viewAs = session ? getJson(VKEY) : null;
+  var me = null;          // accountMe, once loaded
+
+  /* ---------------------------------------------------------------- transport */
+
+  function post(fn, args, useAs) {
+    var body = { fn: fn, args: args || [] };
+    if (session) body.token = session.token;
+    if (useAs && viewAs) body.as = viewAs.uid;
+    return fetch(EXEC, {
       method: 'POST',
       redirect: 'follow',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ fn: fn, args: args, key: cfg.key })
+      body: JSON.stringify(body)
     }).then(function (r) {
       return r.text().then(function (t) { return { status: r.status, text: t }; });
     }, function () {
-      throw new Error('Could not reach the data service. Check your connection; if this keeps happening, ' +
-        'check the deployment’s access is set to “Anyone”.');
+      throw new Error('Could not reach the data service. Check your connection and try again.');
     }).then(function (res) {
       var j = null;
       try { j = JSON.parse(res.text); } catch (e) {}
       if (!j) {
-        var hint = /accounts\.google\.com|ServiceLogin|Sign in/i.test(res.text)
-          ? 'Google asked for a sign-in, so the deployment’s access is not “Anyone”. Edit the deployment and set it to Anyone.'
-          : 'The data service sent back something that is not the app’s reply (HTTP ' + res.status + '). ' +
-            'Check the address ends in /exec and the latest Code.gs is deployed.';
-        throw new Error(hint);
+        throw new Error(/accounts\.google\.com|ServiceLogin|Sign in/i.test(res.text)
+          ? 'The data service asked Google for a sign-in: its deployment access must be “Anyone”.'
+          : 'The data service sent back something unexpected (HTTP ' + res.status + '). The latest Code.gs may not be deployed.');
       }
-      if (j.__error) { var err = new Error(j.__error); err.auth = !!j.__auth; throw err; }
+      if (j.__error) {
+        var err = new Error(j.__error);
+        err.auth = !!j.__auth; err.view = !!j.__view; err.viewOnly = !!j.__viewOnly;
+        throw err;
+      }
       return j.r;
     });
   }
 
-  var cfg = load();
-
+  /* An app call: as the person being viewed, if any. */
   function call(fn, args) {
-    // Not connected yet: the connect screen is up, and connecting reloads the
-    // page, so a call made now simply waits for that.
-    if (!cfg) return new Promise(function () {});
-    return post(cfg, fn, args).catch(function (err) {
-      if (err && err.auth) showConnect(err.message);
+    if (!session) return new Promise(function () {});    // the sign-in screen is up; signing in reloads
+    if (viewAs) {
+      if (VIEW_NOOP[fn]) return Promise.resolve({ ok: true, viewOnly: true });
+      if (!VIEW_OK[fn]) return Promise.reject(new Error(VIEW_ONLY_MSG));
+    }
+    return post(fn, args, true).catch(function (err) {
+      if (err && err.auth) { signedOut('Please sign in again.'); return new Promise(function () {}); }
+      if (err && err.view) { setJson(VKEY, null); alert(err.message); location.reload(); return new Promise(function () {}); }
+      throw err;
+    });
+  }
+
+  /* An account call: always about the signed-in person. */
+  function acct(fn, args) {
+    return post(fn, args, false).then(function (r) {
+      if (r && r.ok === false) throw new Error(r.error || 'Something went wrong.');
+      return r;
+    }, function (err) {
+      if (err && err.auth) signedOut('Please sign in again.');
       throw err;
     });
   }
@@ -2733,123 +2818,518 @@ body.ch-side-off #chListToggle { opacity: .7; }
     });
     return proxy;
   }
+  var SCRIPT = { get run() { return runner(); } };
+  function attachScript() { window.google = window.google || {}; window.google.script = SCRIPT; }
+  attachScript();
 
-  window.google = window.google || {};
-  window.google.script = { get run() { return runner(); } };
-  window.otBridge = { forget: forget, show: function () { showConnect(''); }, get connected() { return !!cfg; } };
+  /* ---------------------------------------------------------------- helpers */
 
-  /* ----------------------------------------------------------- connect screen */
+  function h(tag, attrs, kids) {
+    var n = document.createElement(tag);
+    Object.keys(attrs || {}).forEach(function (k) {
+      var v = attrs[k];
+      if (v === null || v === undefined || v === false) return;
+      if (k === 'text') n.textContent = v;
+      else if (k === 'class') n.className = v;
+      else if (k.slice(0, 2) === 'on') n.addEventListener(k.slice(2).toLowerCase(), v);
+      else n.setAttribute(k, v === true ? '' : v);
+    });
+    (kids || []).forEach(function (c) { if (c !== null && c !== undefined && c !== false) n.appendChild(typeof c === 'string' ? document.createTextNode(c) : c); });
+    return n;
+  }
+  function field(label, id, type, attrs) {
+    return [h('label', { for: id, text: label }), h('input', Object.assign({ id: id, type: type || 'text', spellcheck: 'false' }, attrs || {}))];
+  }
+  function val(root, id) { var n = root.querySelector('#' + id); return n ? n.value.trim() : ''; }
+  function say(root, text, tone) {
+    var m = root.querySelector('.gh-msg');
+    if (m) { m.textContent = text || ''; m.className = 'gh-msg' + (tone ? ' ' + tone : ''); }
+  }
+  function busyBtn(btn, on) { if (btn) btn.disabled = !!on; }
+  function initials(name) {
+    var p = String(name || '?').trim().split(/\s+/);
+    return ((p[0] || '?').charAt(0) + (p.length > 1 ? p[p.length - 1].charAt(0) : '')).toUpperCase();
+  }
+  function appToast(text, bad) { try { if (typeof window.toast === 'function') return window.toast(text, bad); } catch (e) {} }
 
-  var box = null;
-
-  function b64(s) { return btoa(unescape(encodeURIComponent(s))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
-  function unb64(s) { s = s.replace(/-/g, '+').replace(/_/g, '/'); while (s.length % 4) s += '='; return decodeURIComponent(escape(atob(s))); }
-
-  /* #connect=<code> (from "Copy link for another device") fills the form in. */
-  function fromHash() {
-    var m = /[#&]connect=([A-Za-z0-9_-]+)/.exec(location.hash || '');
-    if (!m) return null;
-    try { var o = JSON.parse(unb64(m[1])); return o && o.u && o.k ? { url: o.u, key: o.k } : null; } catch (e) { return null; }
+  /* Signing in as someone new on this browser: nothing of the last person's stays behind. */
+  function clearAppStorage(keep) {
+    try {
+      var keys = [];
+      for (var i = 0; i < localStorage.length; i++) keys.push(localStorage.key(i));
+      keys.forEach(function (k) { if (keep.indexOf(k) === -1) localStorage.removeItem(k); });
+    } catch (e) {}
   }
 
-  function showConnect(message) {
-    var pre = fromHash() || cfg || {};
-    if (!box) {
-      box = document.createElement('div');
-      box.className = 'gh-connect';
-      box.innerHTML =
-        '<form class="gh-card" autocomplete="off">' +
-        '<h2>Connect to your spreadsheet</h2>' +
-        '<p>This page reads and writes your Options Trading sheet through its Apps Script data service. ' +
-        'Paste the two values from the spreadsheet: <b>Trading App → Web app passcode</b>, and the ' +
-        'deployment address ending in <b>/exec</b>. They are saved in this browser only.</p>' +
-        '<label for="ghUrl">Data service address</label>' +
-        '<input id="ghUrl" type="url" spellcheck="false" placeholder="https://script.google.com/macros/s/…/exec">' +
-        '<label for="ghKey">Passcode</label>' +
-        '<input id="ghKey" type="password" spellcheck="false" placeholder="32 characters">' +
-        '<div class="gh-row">' +
-        '<button class="gh-btn primary" type="submit" id="ghGo">Connect</button>' +
-        '<button class="gh-btn" type="button" id="ghLink" hidden>Copy link for another device</button>' +
-        '<button class="gh-btn" type="button" id="ghForget" hidden>Disconnect this device</button>' +
-        '<button class="gh-btn" type="button" id="ghBack" hidden>Back to the app</button>' +
-        '</div>' +
-        '<div class="gh-msg" id="ghMsg"></div>' +
-        '</form>';
-      (document.body || document.documentElement).appendChild(box);
-      box.querySelector('form').addEventListener('submit', function (e) { e.preventDefault(); tryConnect(); });
-      box.querySelector('#ghForget').onclick = function () {
-        forget(); cfg = null; say('This device is disconnected.', 'good');
-        box.querySelector('#ghKey').value = ''; paintButtons();
-      };
-      box.querySelector('#ghBack').onclick = function () {
-        box.hidden = true;
-        if (location.hash) history.replaceState(null, '', location.pathname + location.search);
-      };
-      box.querySelector('#ghLink').onclick = function () {
-        if (!cfg) return;
-        var link = location.origin + location.pathname + '#connect=' + b64(JSON.stringify({ u: cfg.url, k: cfg.key }));
-        var done = function () { say('Link copied. Open it once on the other device (it holds your passcode — send it only to yourself).', 'good'); };
-        if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(link).then(done, function () { prompt('Copy this link:', link); });
-        else prompt('Copy this link:', link);
-      };
+  function signedIn(res) {
+    var last = '';
+    try { last = localStorage.getItem(LKEY) || ''; } catch (e) {}
+    if (last && last !== res.user.uid) clearAppStorage([]);
+    setJson(SKEY, { token: res.token, user: res.user });
+    setJson(VKEY, null);
+    try { localStorage.setItem(LKEY, res.user.uid); } catch (e) {}
+    location.replace(location.pathname + location.search);
+  }
+
+  function signedOut(message) {
+    session = null; viewAs = null;
+    setJson(SKEY, null); setJson(VKEY, null);
+    showSignIn(message || '');
+  }
+
+  /* ---------------------------------------------------------------- sign-in screens */
+
+  var gate = null, cfg = null, pendingEmail = '';
+
+  function screen(nodes) {
+    if (!gate) {
+      gate = h('div', { class: 'gh-connect' });
+      (document.body || document.documentElement).appendChild(gate);
     }
-    box.querySelector('#ghUrl').value = pre.url || '';
-    box.querySelector('#ghKey').value = pre.key || '';
-    box.hidden = false;
-    say(message || '', message ? 'bad' : '');
-    if (fromHash()) say('Details filled in from the link — press Connect.', 'good');
-    paintButtons();
+    gate.innerHTML = '';
+    var card = h('form', { class: 'gh-card', autocomplete: 'on', novalidate: true }, nodes.concat([h('div', { class: 'gh-msg' })]));
+    gate.appendChild(card);
+    gate.hidden = false;
+    var first = card.querySelector('input');
+    if (first) setTimeout(function () { try { first.focus(); } catch (e) {} }, 30);
+    return card;
   }
 
-  function paintButtons() {
-    if (!box) return;
-    box.querySelector('#ghLink').hidden = !cfg;
-    box.querySelector('#ghForget').hidden = !cfg;
-    // Only when the page behind is a working app (connected, and not here because a call was refused).
-    box.querySelector('#ghBack').hidden = !cfg || /not right|no passcode/.test((box.querySelector('#ghMsg') || {}).textContent || '');
+  function afterAuth(card, res, email) {
+    if (res && res.token) return signedIn(res);
+    if (res && res.needCode) { pendingEmail = res.email || email; return showCode(); }
+    if (res && res.pending) return showPending(res.name);
+    say(card, (res && res.error) || 'Something went wrong.', 'bad');
   }
 
-  function say(text, tone) {
-    var m = box && box.querySelector('#ghMsg');
-    if (!m) return;
-    m.textContent = text;
-    m.className = 'gh-msg' + (tone ? ' ' + tone : '');
+  function submit(card, btn, fn, args, email) {
+    say(card, 'One moment…');
+    busyBtn(btn, true);
+    post(fn, args, false).then(function (res) {
+      busyBtn(btn, false);
+      if (res && res.ok === false) { say(card, res.error, 'bad'); return; }
+      afterAuth(card, res, email);
+    }, function (err) { busyBtn(btn, false); say(card, err.message, 'bad'); });
   }
 
-  function tryConnect() {
-    var url = cleanUrl(box.querySelector('#ghUrl').value);
-    var key = box.querySelector('#ghKey').value.trim();
-    if (!/^https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]+\/(exec|dev)$/.test(url)) {
-      say('That address should look like https://script.google.com/macros/s/…/exec', 'bad'); return;
-    }
-    if (!key) { say('Paste the passcode as well.', 'bad'); return; }
-    var go = box.querySelector('#ghGo');
-    go.disabled = true;
-    say('Checking…', '');
-    post({ url: url, key: key }, 'ping', []).then(function (p) {
-      go.disabled = false;
-      if (!p || p.ok !== true) { say((p && p.error) || 'The data service answered, but not with anything usable.', 'bad'); return; }
-      cfg = { url: url, key: key };
-      save(cfg);
-      say('Connected to “' + p.workbookName + '”. Loading your book…', 'good');
-      // A clean start: the app's own boot (and its 20-second stall watchdog)
-      // began while this screen was up, so begin again rather than resume it.
-      setTimeout(function () { location.replace(location.pathname + location.search); }, 400);
-    }, function (err) {
-      go.disabled = false;
-      say(err.message, 'bad');
+  function showSignIn(message) {
+    var card = screen([
+      h('h2', { text: 'Sign in to Options Trading' }),
+      h('p', { text: 'Your own trades, goals and Schwab connection. Market prices and estimates are shared.' }),
+      h('div', { id: 'ghGoogle' }),
+      h('div', { class: 'gh-or', id: 'ghOr', text: 'or' }),
+    ].concat(field('Email or phone', 'ghId', 'text', { autocomplete: 'username', placeholder: 'you@example.com or 602 555 0123' }))
+     .concat(field('Password', 'ghPw', 'password', { autocomplete: 'current-password' }))
+     .concat([
+      h('div', { class: 'gh-row' }, [h('button', { class: 'gh-btn primary wide', type: 'submit', id: 'ghGo', text: 'Sign in' })]),
+      h('div', { class: 'gh-links' }, [
+        h('button', { class: 'gh-link', type: 'button', text: 'Create an account', onClick: function () { showSignUp(); } }),
+        h('button', { class: 'gh-link', type: 'button', text: 'Forgot password?', onClick: function () { showForgot(); } })
+      ])
+    ]));
+    card.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var id = val(card, 'ghId'), pw = card.querySelector('#ghPw').value;
+      if (!id || !pw) { say(card, 'Enter your email (or phone) and password.', 'bad'); return; }
+      submit(card, card.querySelector('#ghGo'), 'authLogin', [{ id: id, password: pw }], id);
+    });
+    if (message) say(card, message, 'bad');
+    googleButton(card);
+  }
+
+  function showSignUp() {
+    var card = screen([
+      h('h2', { text: 'Create an account' }),
+      h('p', { text: 'We’ll email you a code to confirm the address. Then Beau approves new accounts, usually the same day.' })
+    ].concat(field('Your name', 'ghName', 'text', { autocomplete: 'name' }))
+     .concat(field('Email', 'ghEmail', 'email', { autocomplete: 'email' }))
+     .concat(field('Password (8+ characters)', 'ghPw', 'password', { autocomplete: 'new-password' }))
+     .concat(field('Password again', 'ghPw2', 'password', { autocomplete: 'new-password' }))
+     .concat([
+      h('div', { class: 'gh-row' }, [h('button', { class: 'gh-btn primary wide', type: 'submit', id: 'ghGo', text: 'Create account' })]),
+      h('div', { class: 'gh-links' }, [h('button', { class: 'gh-link', type: 'button', text: '← Back to sign in', onClick: function () { showSignIn(); } })])
+    ]));
+    card.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var pw = card.querySelector('#ghPw').value, pw2 = card.querySelector('#ghPw2').value;
+      if (pw !== pw2) { say(card, 'The two passwords are different.', 'bad'); return; }
+      var email = val(card, 'ghEmail');
+      submit(card, card.querySelector('#ghGo'), 'authSignup', [{ name: val(card, 'ghName'), email: email, password: pw }], email);
     });
   }
 
-  function boot() {
-    if (!cfg || /[#&]connect\b/.test(location.hash || '')) showConnect('');
+  function showCode() {
+    var card = screen([
+      h('h2', { text: 'Check your email' }),
+      h('p', { text: 'We sent a 6-digit code to ' + pendingEmail + '. It works for 15 minutes (check spam if it hasn’t arrived).' })
+    ].concat(field('Code', 'ghCode', 'text', { inputmode: 'numeric', autocomplete: 'one-time-code', maxlength: '6' }))
+     .concat([
+      h('div', { class: 'gh-row' }, [h('button', { class: 'gh-btn primary wide', type: 'submit', id: 'ghGo', text: 'Confirm' })]),
+      h('div', { class: 'gh-links' }, [
+        h('button', { class: 'gh-link', type: 'button', text: '← Back to sign in', onClick: function () { showSignIn(); } }),
+        h('button', { class: 'gh-link', type: 'button', text: 'Send a new code', onClick: function () {
+          post('authResendCode', [{ email: pendingEmail }], false).then(function () { say(card, 'A new code is on its way.', 'good'); });
+        } })
+      ])
+    ]));
+    card.addEventListener('submit', function (e) {
+      e.preventDefault();
+      submit(card, card.querySelector('#ghGo'), 'authVerifyEmail', [{ email: pendingEmail, code: val(card, 'ghCode') }], pendingEmail);
+    });
   }
+
+  function showPending(name) {
+    screen([
+      h('h2', { text: 'Thanks' + (name ? ', ' + name : '') + '!' }),
+      h('p', { text: 'Your account is waiting for Beau to approve it. You’ll get an email when it’s ready, then sign in here the same way.' }),
+      h('div', { class: 'gh-row' }, [h('button', { class: 'gh-btn', type: 'button', text: 'Back to sign in', onClick: function () { showSignIn(); } })])
+    ]);
+  }
+
+  function showForgot() {
+    var card = screen([
+      h('h2', { text: 'Reset your password' }),
+      h('p', { text: 'Enter the email on your account and we’ll send a reset code.' })
+    ].concat(field('Email', 'ghEmail', 'email', { autocomplete: 'email' }))
+     .concat([
+      h('div', { class: 'gh-row' }, [h('button', { class: 'gh-btn primary wide', type: 'submit', id: 'ghGo', text: 'Send code' })]),
+      h('div', { class: 'gh-links' }, [h('button', { class: 'gh-link', type: 'button', text: '← Back to sign in', onClick: function () { showSignIn(); } })])
+    ]));
+    card.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var email = val(card, 'ghEmail');
+      if (!email) { say(card, 'Enter your email.', 'bad'); return; }
+      busyBtn(card.querySelector('#ghGo'), true);
+      post('authForgot', [{ email: email }], false).then(function () { pendingEmail = email; showReset(); },
+        function (err) { busyBtn(card.querySelector('#ghGo'), false); say(card, err.message, 'bad'); });
+    });
+  }
+
+  function showReset() {
+    var card = screen([
+      h('h2', { text: 'Choose a new password' }),
+      h('p', { text: 'If ' + pendingEmail + ' has an account, a code is on its way. This signs you out everywhere else.' })
+    ].concat(field('Code', 'ghCode', 'text', { inputmode: 'numeric', autocomplete: 'one-time-code', maxlength: '6' }))
+     .concat(field('New password (8+ characters)', 'ghPw', 'password', { autocomplete: 'new-password' }))
+     .concat([
+      h('div', { class: 'gh-row' }, [h('button', { class: 'gh-btn primary wide', type: 'submit', id: 'ghGo', text: 'Save and sign in' })]),
+      h('div', { class: 'gh-links' }, [h('button', { class: 'gh-link', type: 'button', text: '← Back to sign in', onClick: function () { showSignIn(); } })])
+    ]));
+    card.addEventListener('submit', function (e) {
+      e.preventDefault();
+      submit(card, card.querySelector('#ghGo'), 'authReset', [{ email: pendingEmail, code: val(card, 'ghCode'), password: card.querySelector('#ghPw').value }], pendingEmail);
+    });
+  }
+
+  /* Google's own button, when Beau has added the Client ID (Trading App menu). */
+  function googleButton(card) {
+    var slot = card.querySelector('#ghGoogle'), or = card.querySelector('#ghOr');
+    var hide = function () { if (slot) slot.style.display = 'none'; if (or) or.style.display = 'none'; };
+    var draw = function () {
+      if (!cfg || !cfg.googleClientId) return hide();
+      var gis = window.google && window.google.accounts && window.google.accounts.id;
+      if (!gis) return;
+      gis.initialize({ client_id: cfg.googleClientId, callback: function (resp) {
+        submit(card, null, 'authGoogle', [resp.credential], '');
+      } });
+      gis.renderButton(slot, { theme: 'filled_black', size: 'large', text: 'signin_with', shape: 'pill', width: 300 });
+    };
+    var load = function () {
+      if (!cfg || !cfg.googleClientId) return hide();
+      if (window.google && window.google.accounts && window.google.accounts.id) return draw();
+      var s = document.createElement('script');
+      s.src = 'https://accounts.google.com/gsi/client';
+      s.async = true;
+      s.onload = function () { attachScript(); draw(); };   // Google's script must not take google.script with it
+      s.onerror = hide;
+      document.head.appendChild(s);
+    };
+    if (cfg) return load();
+    post('authConfig', [], false).then(function (c) { cfg = c || {}; load(); }, hide);
+  }
+
+  /* ---------------------------------------------------------------- account menu */
+
+  var menu = null;
+
+  function chip() {
+    var right = document.querySelector('.topbar-right');
+    if (!right || document.getElementById('ghChip')) return;
+    var u = (me && me.user) || (session && session.user) || {};
+    var badge = me && me.pendingMembers ? h('span', { class: 'gh-badge', text: String(me.pendingMembers) }) : null;
+    var waiting = me ? me.viewers.filter(function (v) { return v.status === 'requested'; }).length : 0;
+    var b = h('button', { class: 'gh-chip', id: 'ghChip', type: 'button', title: 'Your account', onClick: function (e) { e.stopPropagation(); toggleMenu(b); } }, [
+      h('span', { class: 'gh-avatar', text: initials(u.name) }),
+      h('span', { class: 'gh-chip-name', text: u.name || 'Account' }),
+      badge || (waiting ? h('span', { class: 'gh-badge', text: String(waiting) }) : null)
+    ]);
+    var refresh = document.getElementById('btnRefresh');
+    right.insertBefore(b, refresh ? refresh.nextSibling : null);
+  }
+
+  function repaintChip() { var c = document.getElementById('ghChip'); if (c) c.remove(); chip(); }
+
+  function toggleMenu(anchor) {
+    if (menu && !menu.hidden) { menu.hidden = true; return; }
+    if (!menu) {
+      menu = h('div', { class: 'gh-menu', hidden: true });
+      document.body.appendChild(menu);
+      document.addEventListener('click', function (e) { if (menu && !menu.contains(e.target)) menu.hidden = true; });
+    }
+    menu.innerHTML = '';
+    var u = (me && me.user) || (session && session.user) || {};
+    var item = function (text, fn) { return h('button', { type: 'button', text: text, onClick: function () { menu.hidden = true; fn(); } }); };
+    menu.appendChild(h('div', { class: 'gh-head', text: 'Signed in as ' + (u.name || '') }));
+    if (viewAs) menu.appendChild(item('← Back to my account', stopViewing));
+    menu.appendChild(item('My account', openAccount));
+    var waiting = me ? me.viewers.filter(function (v) { return v.status === 'requested'; }).length : 0;
+    menu.appendChild(item('Sharing' + (waiting ? ' (' + waiting + ' waiting)' : ''), function () { openAccount('sharing'); }));
+    menu.appendChild(h('div', { class: 'gh-sep' }));
+    menu.appendChild(h('div', { class: 'gh-head', text: 'View a member’s trades' }));
+    ((me && me.canView) || []).forEach(function (v) {
+      menu.appendChild(item((viewAs && viewAs.uid === v.uid ? '✓ ' : '') + 'View ' + v.name, function () { startViewing(v); }));
+    });
+    menu.appendChild(item('Ask to view a member’s trades…', openDirectory));
+    if (u.role === 'admin') {
+      menu.appendChild(h('div', { class: 'gh-sep' }));
+      menu.appendChild(item('Admin → Members' + (me && me.pendingMembers ? ' (' + me.pendingMembers + ' waiting)' : ''), openAdmin));
+    }
+    menu.appendChild(h('div', { class: 'gh-sep' }));
+    menu.appendChild(item('Sign out', function () {
+      clearAppStorage([LKEY]);
+      location.replace(location.pathname + location.search);
+    }));
+    var r = anchor.getBoundingClientRect();
+    menu.style.top = (r.bottom + 6) + 'px';
+    menu.style.right = Math.max(8, window.innerWidth - r.right) + 'px';
+    menu.hidden = false;
+  }
+
+  function startViewing(v) {
+    setJson(VKEY, { uid: v.uid, name: v.name });
+    location.replace(location.pathname + location.search);
+  }
+  function stopViewing() {
+    setJson(VKEY, null);
+    location.replace(location.pathname + location.search);
+  }
+
+  function loadMe() {
+    return acct('accountMe', []).then(function (r) { me = r; repaintChip(); return r; }, function () { return null; });
+  }
+
+  /* ---------------------------------------------------------------- dialogs */
+
+  function modal(title, build) {
+    var wrap = h('div', { class: 'gh-modal', onClick: function (e) { if (e.target === wrap) wrap.remove(); } });
+    var card = h('div', { class: 'gh-card' }, [
+      h('button', { class: 'gh-btn sm gh-close', type: 'button', text: 'Close', onClick: function () { wrap.remove(); } }),
+      h('h2', { text: title })
+    ]);
+    wrap.appendChild(card);
+    document.body.appendChild(wrap);
+    build(card, wrap);
+    return wrap;
+  }
+
+  function pill(status) {
+    var text = { none: 'No access', requested: 'Pending', approved: 'Has access', declined: 'Declined', removed: 'No access',
+      pending: 'Waiting', active: 'Active', disabled: 'Switched off' }[status] || status;
+    return h('span', { class: 'gh-pill ' + status, text: text });
+  }
+
+  function openAccount(focus) {
+    modal('My account', function (card, wrap) {
+      var u = (me && me.user) || {};
+      var msg = h('div', { class: 'gh-msg' });
+      var note = function (t, tone) { msg.textContent = t; msg.className = 'gh-msg' + (tone ? ' ' + tone : ''); };
+
+      card.appendChild(h('h3', { text: 'Profile' }));
+      field('Name', 'gaName', 'text', { value: u.name || '' }).forEach(function (n) { card.appendChild(n); });
+      field('Email', 'gaEmail', 'email', { value: u.email || '', readonly: true }).forEach(function (n) { card.appendChild(n); });
+      field('Phone (lets you sign in with your phone and the same password)', 'gaPhone', 'tel', { value: u.phone || '', placeholder: '602 555 0123' }).forEach(function (n) { card.appendChild(n); });
+      card.appendChild(h('div', { class: 'gh-row' }, [h('button', { class: 'gh-btn primary', type: 'button', text: 'Save profile', onClick: function (e) {
+        var b = e.target; busyBtn(b, true);
+        acct('accountUpdate', [{ name: val(card, 'gaName'), phone: val(card, 'gaPhone') }]).then(function (r) {
+          busyBtn(b, false); me.user = r.user; card.querySelector('#gaPhone').value = r.user.phone || ''; repaintChip(); note('Saved.', 'good');
+        }, function (err) { busyBtn(b, false); note(err.message, 'bad'); });
+      } })]));
+
+      card.appendChild(h('h3', { text: u.hasPassword ? 'Change password' : 'Set a password' }));
+      if (!u.hasPassword) card.appendChild(h('p', { text: 'You sign in with Google. A password also lets you sign in with your email or phone.' }));
+      if (u.hasPassword) field('Current password', 'gaCur', 'password', { autocomplete: 'current-password' }).forEach(function (n) { card.appendChild(n); });
+      field('New password (8+ characters)', 'gaNew', 'password', { autocomplete: 'new-password' }).forEach(function (n) { card.appendChild(n); });
+      card.appendChild(h('div', { class: 'gh-row' }, [h('button', { class: 'gh-btn', type: 'button', text: 'Save password', onClick: function (e) {
+        var b = e.target; busyBtn(b, true);
+        acct('accountSetPassword', [{ current: (card.querySelector('#gaCur') || {}).value || '', password: card.querySelector('#gaNew').value }]).then(function (r) {
+          busyBtn(b, false); me.user = r.user; note('Password saved.', 'good'); card.querySelector('#gaNew').value = '';
+        }, function (err) { busyBtn(b, false); note(err.message, 'bad'); });
+      } })]));
+
+      var share = h('div', { id: 'gaSharing' });
+      card.appendChild(share);
+      paintSharing(share, note);
+      card.appendChild(msg);
+
+      card.appendChild(h('h3', { text: 'Security' }));
+      card.appendChild(h('div', { class: 'gh-row' }, [h('button', { class: 'gh-btn', type: 'button', text: 'Sign out on every device', onClick: function () {
+        if (!confirm('Sign out on every device, including this one?')) return;
+        acct('accountSignOutEverywhere', []).then(function () { signedOut('You were signed out everywhere.'); wrap.remove(); }, function (err) { note(err.message, 'bad'); });
+      } })]));
+      if (focus === 'sharing') setTimeout(function () { share.scrollIntoView({ block: 'start' }); }, 50);
+    });
+  }
+
+  function paintSharing(box, note) {
+    box.innerHTML = '';
+    box.appendChild(h('h3', { text: 'Who can view my trades' }));
+    box.appendChild(h('p', { text: 'Viewers see your Dashboard and Trades only — never your Schwab account, goals, settings or anything else — and cannot change anything.' }));
+    var list = h('div', { class: 'gh-list' });
+    var viewers = (me && me.viewers) || [];
+    if (!viewers.length) list.appendChild(h('div', { class: 'gh-empty', text: 'Nobody yet. Members ask from their own menu; you’ll get an email.' }));
+    viewers.forEach(function (v) {
+      var acts = v.status === 'requested'
+        ? [h('button', { class: 'gh-btn sm primary', type: 'button', text: 'Approve', onClick: function () { decide(v, true); } }),
+           h('button', { class: 'gh-btn sm', type: 'button', text: 'Decline', onClick: function () { decide(v, false); } })]
+        : [h('button', { class: 'gh-btn sm', type: 'button', text: 'Remove', onClick: function () {
+            if (confirm('Stop ' + v.name + ' viewing your trades?')) acct('accessRemove', [v.id]).then(again, fail);
+          } })];
+      list.appendChild(h('div', { class: 'gh-item' }, [h('div', { class: 'gh-name', text: v.name }), pill(v.status)].concat(acts)));
+    });
+    box.appendChild(list);
+
+    box.appendChild(h('h3', { text: 'Trades I can view' }));
+    var list2 = h('div', { class: 'gh-list' });
+    var cv = (me && me.canView) || [];
+    if (!cv.length) list2.appendChild(h('div', { class: 'gh-empty', text: 'None yet.' }));
+    cv.forEach(function (v) {
+      list2.appendChild(h('div', { class: 'gh-item' }, [
+        h('div', { class: 'gh-name', text: v.name }),
+        h('button', { class: 'gh-btn sm primary', type: 'button', text: 'View', onClick: function () { startViewing(v); } }),
+        h('button', { class: 'gh-btn sm', type: 'button', text: 'Stop', onClick: function () {
+          if (confirm('Stop viewing ' + v.name + '’s trades? You’d have to ask again.')) acct('accessRemove', [v.id]).then(again, fail);
+        } })
+      ]));
+    });
+    box.appendChild(list2);
+    box.appendChild(h('div', { class: 'gh-row' }, [h('button', { class: 'gh-btn', type: 'button', text: 'Ask to view a member’s trades…', onClick: openDirectory })]));
+
+    function again() { loadMe().then(function () { paintSharing(box, note); }); }
+    function fail(err) { note(err.message, 'bad'); }
+    function decide(v, yes) { acct('accessDecide', [v.id, yes]).then(function () { note(yes ? v.name + ' can now view your trades.' : 'Declined.', 'good'); again(); }, fail); }
+  }
+
+  function openDirectory() {
+    modal('Members', function (card) {
+      card.appendChild(h('p', { text: 'Pick a member to ask to view their Dashboard and Trades. They’ll get an email and can approve or decline.' }));
+      var list = h('div', { class: 'gh-list' }, [h('div', { class: 'gh-empty', text: 'Loading…' })]);
+      card.appendChild(list);
+      var msg = h('div', { class: 'gh-msg' });
+      card.appendChild(msg);
+      var paint = function () {
+        acct('accessDirectory', []).then(function (r) {
+          list.innerHTML = '';
+          if (!r.members.length) list.appendChild(h('div', { class: 'gh-empty', text: 'No other members yet.' }));
+          r.members.forEach(function (m) {
+            var act;
+            if (m.status === 'approved') act = h('button', { class: 'gh-btn sm primary', type: 'button', text: 'View', onClick: function () { startViewing(m); } });
+            else if (m.status === 'requested') act = h('button', { class: 'gh-btn sm', type: 'button', text: 'Waiting', disabled: true });
+            else act = h('button', { class: 'gh-btn sm primary', type: 'button', text: m.status === 'declined' ? 'Ask again' : 'Ask to view', onClick: function (e) {
+              busyBtn(e.target, true);
+              acct('accessRequest', [m.uid]).then(function () {
+                msg.textContent = 'Request sent — ' + m.name + ' will get an email.'; msg.className = 'gh-msg good'; paint();
+              }, function (err) { busyBtn(e.target, false); msg.textContent = err.message; msg.className = 'gh-msg bad'; });
+            } });
+            list.appendChild(h('div', { class: 'gh-item' }, [
+              h('span', { class: 'gh-avatar', text: initials(m.name) }), h('div', { class: 'gh-name', text: m.name }), pill(m.status), act
+            ]));
+          });
+        }, function (err) { list.innerHTML = ''; list.appendChild(h('div', { class: 'gh-empty', text: err.message })); });
+      };
+      paint();
+    });
+  }
+
+  function openAdmin() {
+    modal('Members (admin)', function (card) {
+      card.appendChild(h('p', { text: 'New accounts wait here until you approve them. Approving makes their own workbook in your Google Drive.' }));
+      var list = h('div', { class: 'gh-list' }, [h('div', { class: 'gh-empty', text: 'Loading…' })]);
+      var msg = h('div', { class: 'gh-msg' });
+      card.appendChild(list); card.appendChild(msg);
+      var paint = function () {
+        acct('adminUsers', []).then(function (r) {
+          list.innerHTML = '';
+          var order = { pending: 0, active: 1, disabled: 2 };
+          r.members.sort(function (a, b) { return (order[a.status] - order[b.status]) || a.name.localeCompare(b.name); });
+          r.members.forEach(function (m) {
+            var acts = [];
+            var set = function (status, label) {
+              return h('button', { class: 'gh-btn sm' + (status === 'active' ? ' primary' : ''), type: 'button', text: label, onClick: function (e) {
+                busyBtn(e.target, true);
+                acct('adminSetStatus', [m.uid, status]).then(function () { paint(); loadMe(); }, function (err) { busyBtn(e.target, false); msg.textContent = err.message; msg.className = 'gh-msg bad'; });
+              } });
+            };
+            if (m.uid !== 'home') {
+              if (m.status === 'pending') acts.push(m.emailVerified ? set('active', 'Approve') : h('span', { class: 'gh-sub', text: 'email not confirmed yet' }));
+              if (m.status === 'active') acts.push(set('disabled', 'Switch off'));
+              if (m.status === 'disabled') acts.push(set('active', 'Switch on'));
+            }
+            list.appendChild(h('div', { class: 'gh-item' }, [
+              h('div', { class: 'gh-name' }, [h('div', { text: m.name + (m.uid === 'home' ? ' (you)' : '') }),
+                h('div', { class: 'gh-sub', text: m.email + (m.phone ? ' · ' + m.phone : '') + (m.google ? ' · Google' : '') })]),
+              pill(m.status)
+            ].concat(acts)));
+          });
+        }, function (err) { list.innerHTML = ''; list.appendChild(h('div', { class: 'gh-empty', text: err.message })); });
+      };
+      paint();
+    });
+  }
+
+  /* ---------------------------------------------------------------- view-only mode */
+
+  function viewerMode() {
+    document.body.classList.add('ot-viewer');
+    var bar = h('div', { class: 'gh-viewbar', id: 'ghViewbar', role: 'status' }, [
+      h('span', {}, ['👁 ', h('b', { text: 'View only' }), ' — you’re looking at ', h('b', { text: viewAs.name + '’s' }),
+        ' trades. This is not your account; nothing can be changed.']),
+      h('button', { class: 'gh-btn sm', type: 'button', text: 'Back to my account', onClick: stopViewing })
+    ]);
+    var tabs = document.getElementById('tabs');
+    var header = document.querySelector('header');
+    var after = tabs || header;
+    if (after && after.parentNode) after.parentNode.insertBefore(bar, after.nextSibling);
+    else document.body.insertBefore(bar, document.body.firstChild);
+
+    // Only Dashboard, Trades and Trade Viewer; writes never leave the page.
+    if (typeof window.showTab === 'function') {
+      var show = window.showTab;
+      window.showTab = function (view) { return show.call(this, VIEW_TABS[view] ? view : 'dashboard'); };
+    }
+    if (typeof window.write === 'function') {
+      window.write = function (name) {
+        if (VIEW_NOOP[name]) return Promise.resolve({ ok: true, viewOnly: true });
+        appToast(VIEW_ONLY_MSG, true);
+        return Promise.resolve({ ok: false, error: VIEW_ONLY_MSG });
+      };
+    }
+    document.title = viewAs.name + '’s trades (view only) — Options Trading';
+  }
+
+  /* ---------------------------------------------------------------- start */
+
+  function boot() {
+    if (!session) { showSignIn(''); return; }
+    if (viewAs) viewerMode();
+    chip();
+    loadMe();
+  }
+  // Registered before the app's own DOMContentLoaded handler, so the view-only
+  // wrappers are in place before the app starts.
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
   else boot();
-  // Typing #connect onto the address of an open tab changes only the hash.
-  window.addEventListener('hashchange', function () {
-    if (/[#&]connect\b/.test(location.hash || '')) showConnect('');
-  });
+
+  window.otAccount = { open: openAccount, members: openDirectory, signOut: function () { signedOut(''); } };
 })();
 </script>
 
@@ -4126,11 +4606,15 @@ function renderFirstRun() {
   if (panel.hidden) return;
 
   var archived = S.report && S.report.holdings ? true : false;
-  $('#firstRunText').textContent =
-    'Your book is empty, so every figure below reads zero — that is not a fault. ' +
-    'Run Trading App \u2192 1. First-time setup in the spreadsheet if you have not, then ' +
-    'drop your Schwab CSV into the Import tab. It should reconcile to $34,352.81.';
+  // A member's book on the GitHub page has no spreadsheet of theirs to open (build 2026-11-20).
+  $('#firstRunText').textContent = S.sheetUrl
+    ? 'Your book is empty, so every figure below reads zero — that is not a fault. ' +
+      'Run Trading App \u2192 1. First-time setup in the spreadsheet if you have not, then ' +
+      'drop your Schwab CSV into the Import tab. It should reconcile to $34,352.81.'
+    : 'Your book is empty, so every figure below reads zero — that is not a fault. ' +
+      'Add your first trade with + New Position on the Trades tab, or drop your Schwab CSV into the Import tab.';
   $('#btnGoSheet').href = S.sheetUrl || '#';
+  $('#btnGoSheet').hidden = !S.sheetUrl;
 }
 
 /**
@@ -10640,6 +11124,7 @@ function renderSettings() {
   };
 
   $('#btnOpenSheet').href = S.sheetUrl;
+  $('#btnOpenSheet').hidden = !S.sheetUrl;   // members have no spreadsheet of their own to open
   wirePriceSettings();
 }
 
