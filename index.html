@@ -11,16 +11,6 @@
     Duplicate identical viewport tags are harmless; the last one wins.
   -->
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Options Trading</title>
-  <!-- GitHub Pages build: installable on a phone home screen. -->
-  <link rel="manifest" href="manifest.webmanifest">
-  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
-  <link rel="apple-touch-icon" href="apple-touch-icon.png">
-  <meta name="theme-color" content="#0e1116">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="Trading">
   <style>
 /* ---------------------------------------------------------------- tokens */
 :root {
@@ -323,6 +313,8 @@ table.data td.neg { color: var(--neg); }
 .pill.open { border-color: var(--accent); color: var(--accent); }
 .pill.win  { border-color: var(--pos); color: var(--pos); }
 .pill.flat { color: var(--muted); }
+/* An assigned trade (build 2026-11-22): amber, the colour of the strike line. */
+.pill.assigned { border-color: #e3b341; color: #e3b341; }
 /* Trade sequence numbers: the first sale flagged, rolls numbered after it. */
 .seq { border: 0; background: none; padding: 0 2px; font: inherit; font-family: var(--mono); color: var(--text); cursor: pointer; }
 .seq:hover { text-decoration: underline; }
@@ -1010,10 +1002,11 @@ tr.is-saving td:last-child { opacity: 1; }
     border-bottom: 1px solid var(--line);
   }
   /* Explicitly re-shown: the rule above turned these off outright. */
-  .hdr-figs { display: flex; width: 100%; justify-content: space-between; gap: 12px; }
-  .hdr-fig { align-items: flex-start; flex-direction: row; gap: 7px; align-items: baseline; }
+  .hdr-figs { display: flex; width: 100%; justify-content: space-between; gap: 10px; }
+  /* Three figures since build 2026-11-22 (Value, Balance, Available): label over value. */
+  .hdr-fig { align-items: flex-start; flex-direction: column; gap: 0; }
   .hdr-lbl { font-size: 9px; }
-  .hdr-val { font-size: 14px; }
+  .hdr-val { font-size: 13.5px; }
   /* Push the views down past that fixed strip. */
   .view { padding-top: 52px; }
   #saveState { display: none; }
@@ -1467,13 +1460,17 @@ body.ch-side-off #chListToggle { opacity: .7; }
     </nav>
     <div class="topbar-right">
       <div class="hdr-figs">
-        <div class="hdr-fig">
+        <div class="hdr-fig" title="Cash plus assigned shares at what they cost (the assigned strike). Being assigned does not move it; only a real gain or loss on the shares does.">
+          <span class="hdr-lbl">Value</span>
+          <span class="hdr-val" id="hdrValue">—</span>
+        </div>
+        <div class="hdr-fig" id="hdrBalanceFig">
           <span class="hdr-lbl">Balance</span>
           <span class="hdr-val" id="hdrBalance">—</span>
         </div>
         <div class="hdr-fig">
           <span class="hdr-lbl">Available</span>
-          <span class="hdr-val" id="hdrAvailable" title="Balance less collateral behind open puts">—</span>
+          <span class="hdr-val" id="hdrAvailable" title="Cash less collateral behind open puts">—</span>
         </div>
       </div>
       <span id="saveState" class="save-state"></span>
@@ -1631,17 +1628,21 @@ body.ch-side-off #chListToggle { opacity: .7; }
 
     <div class="panel" id="holdingsPanel" hidden>
       <div class="panel-head">
-        <h2>Shares held &amp; cost basis</h2>
-        <span class="panel-sub">Click a row for the covered-call maths</span>
+        <h2>Assigned options</h2>
+        <span class="panel-sub">Shares you were assigned. Click a row for the covered-call maths; click the ticker for the whole trade.</span>
         <span class="panel-tools"><button class="btn btn-ghost btn-xs" data-reset-cols="holdingsTable">Reset columns</button></span>
       </div>
       <div class="table-wrap">
         <table class="data" id="holdingsTable">
           <thead><tr>
-            <th>Ticker</th><th class="num">Shares</th><th class="num">Assigned at</th>
-            <th class="num">Put premium</th><th class="num">Call premium</th>
-            <th class="num">Cost basis</th><th class="num">Break even</th>
-            <th class="num">Mark</th><th class="num">Unrealised</th>
+            <th>Ticker</th><th class="num">Shares</th>
+            <th class="num" title="The put's strike: what the shares were bought for">Strike</th>
+            <th class="num" title="The stock's close on the business day before you were assigned">Assigned At</th>
+            <th class="num" title="Net premium from the put that was assigned, and its rolls">Put premium</th>
+            <th class="num" title="Net premium from covered calls written on these shares">Call premium</th>
+            <th class="num" title="Your break-even: the strike less every premium this trade has banked, per share">Cost basis</th>
+            <th class="num" title="The stock now (live while the market is open, else the last close)">Market</th>
+            <th class="num" title="Market against your cost basis, on all the shares">Unrealised</th>
           </tr></thead>
           <tbody></tbody>
         </table>
@@ -1681,7 +1682,7 @@ body.ch-side-off #chListToggle { opacity: .7; }
             <th data-sort="itmPct" class="num" title="How far the stock is past the strike, against the stock price: a put is in the money below its strike, a call above it. Blank when out of the money.">ITM</th>
             <th data-sort="costBasis" class="num" title="What a share would cost if assigned. Green while the market is above it, red while below.">Cost Basis</th>
             <th data-sort="vsBasis" class="num" title="Market against the cost basis">Mkt vs basis</th>
-            <th data-sort="analystTarget" class="num" title="Estimated value: the analysts' average 12-month price target. Fetched when you first trade a ticker, then refreshed every Monday. Click a value to type your own (from ChartMill).">Estimated</th>
+            <th data-sort="analystTarget" class="num" title="Estimated value, realistic rather than optimistic: the lower of halfway between the analysts' low and average 12-month targets, and half the upside their average implies from the close the day it was fetched. Fetched when you first trade a ticker, then re-worked every Monday. Hover a value for the figures behind it; click to type your own.">Estimated</th>
             <th data-sort="rolls" class="num">Rolls</th>
           </tr></thead>
           <tbody></tbody>
@@ -2523,7 +2524,7 @@ body.ch-side-off #chListToggle { opacity: .7; }
       <div class="panel">
         <div class="panel-head">
           <h2>Estimated values</h2>
-          <span class="panel-sub">The analysts' average 12-month price target, per ticker</span>
+          <span class="panel-sub">A realistic value per ticker, worked down from the analysts' 12-month targets</span>
         </div>
         <div class="panel-body">
           <p class="prose" id="researchStatus">Checking&hellip;</p>
@@ -2536,7 +2537,10 @@ body.ch-side-off #chListToggle { opacity: .7; }
             Finviz &mdash; whichever answers), no key needed. Runs in the background, so you can keep
             using the app. Fetched when you log a
             ticker's first trade, then every Monday evening if it is more than 7 days old; Update fetches
-            every ticker that is missing or more than 7 days old (a few seconds each). <b>Type estimates</b>
+            every ticker that is missing or more than 7 days old (a few seconds each). The Estimated value
+            shown is the <b>realistic</b> one: the lower of halfway between the analysts' low and average
+            targets, and half the upside their average implies from that day's close &mdash; the average
+            alone runs well ahead of where stocks actually go. <b>Type estimates</b>
             lists all your tickers so you can enter ChartMill's mean targets in one go; you can also click
             any Estimated value on the dashboard.
           </span>
@@ -2615,723 +2619,6 @@ body.ch-side-off #chListToggle { opacity: .7; }
 </div>
 
 <div id="toast" class="toast" hidden></div>
-
-<!-- ============ GitHub Pages bridge: google.script.run over fetch ============ -->
-<style>
-/* ---------------------------------------------------------------------------
-   GitHub page: sign-in, account menu, sharing, view-only mode (build 2026-11-20)
-   --------------------------------------------------------------------------- */
-.gh-connect { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 20px; overflow: auto;
-  background: var(--bg, #0e1116); color: var(--text, #e6edf3); font-family: var(--sans, sans-serif); }
-.gh-connect[hidden], .gh-modal[hidden], .gh-menu[hidden] { display: none !important; }
-.gh-card { width: 100%; max-width: 420px; background: var(--panel, #161b22); border: 1px solid var(--line, #242c38);
-  border-radius: 12px; padding: 24px; box-shadow: 0 10px 40px rgba(0,0,0,.35); }
-.gh-card h2 { margin: 0 0 6px; font-size: 19px; }
-.gh-card h3 { margin: 22px 0 8px; font-size: 14px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted, #8b949e); }
-.gh-card p { margin: 0 0 14px; color: var(--muted, #8b949e); font-size: 13.5px; line-height: 1.45; }
-.gh-card label { display: block; font-size: 12.5px; color: var(--muted, #8b949e); margin: 12px 0 5px; }
-.gh-card input { width: 100%; box-sizing: border-box; padding: 9px 11px; border-radius: 8px; font-size: 14px;
-  border: 1px solid var(--line, #242c38); background: var(--bg, #0e1116); color: var(--text, #e6edf3); font-family: inherit; }
-.gh-card input:focus { outline: 2px solid var(--accent, #3987e5); outline-offset: -1px; }
-.gh-card input[readonly] { opacity: .7; }
-.gh-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 16px; }
-.gh-btn { border: 1px solid var(--line, #242c38); background: transparent; color: var(--text, #e6edf3); padding: 9px 14px;
-  border-radius: 8px; font-size: 14px; cursor: pointer; font-family: inherit; }
-.gh-btn.primary { background: var(--accent, #3987e5); border-color: var(--accent, #3987e5); color: #fff; font-weight: 600; }
-.gh-btn.sm { padding: 5px 10px; font-size: 13px; }
-.gh-btn.wide { width: 100%; }
-.gh-btn:disabled { opacity: .55; cursor: default; }
-.gh-link { background: none; border: 0; color: var(--accent, #3987e5); cursor: pointer; padding: 0; font-size: 13.5px; font-family: inherit; }
-.gh-msg { margin-top: 12px; font-size: 13px; min-height: 1em; line-height: 1.4; }
-.gh-msg.bad { color: var(--neg, #e66767); }
-.gh-msg.good { color: var(--pos, #199e70); }
-.gh-or { display: flex; align-items: center; gap: 10px; margin: 18px 0 4px; color: var(--muted, #8b949e); font-size: 12px; }
-.gh-or::before, .gh-or::after { content: ''; flex: 1; height: 1px; background: var(--line, #242c38); }
-#ghGoogle { display: flex; justify-content: center; min-height: 44px; }
-.gh-links { display: flex; justify-content: space-between; margin-top: 14px; }
-
-/* account chip + menu in the top bar */
-.gh-chip { display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--line, #242c38); background: transparent;
-  color: var(--text, #e6edf3); border-radius: 999px; padding: 4px 10px 4px 4px; cursor: pointer; font-size: 13px; font-family: inherit; }
-.gh-avatar { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--accent, #3987e5);
-  color: #fff; font-weight: 700; font-size: 12px; }
-.gh-chip .gh-badge { background: var(--neg, #e66767); color: #fff; border-radius: 999px; font-size: 11px; padding: 0 6px; }
-.gh-menu { position: fixed; z-index: 900; min-width: 240px; background: var(--panel, #161b22); border: 1px solid var(--line, #242c38);
-  border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,.4); padding: 6px; font-size: 14px; }
-.gh-menu button { display: block; width: 100%; text-align: left; background: none; border: 0; color: var(--text, #e6edf3);
-  padding: 8px 10px; border-radius: 6px; cursor: pointer; font-family: inherit; font-size: 14px; }
-.gh-menu button:hover { background: rgba(127,127,127,.12); }
-.gh-menu .gh-sep { height: 1px; background: var(--line, #242c38); margin: 6px 4px; }
-.gh-menu .gh-head { padding: 6px 10px 4px; color: var(--muted, #8b949e); font-size: 12px; }
-
-/* dialogs */
-.gh-modal { position: fixed; inset: 0; z-index: 950; background: rgba(0,0,0,.55); display: grid; place-items: start center; overflow: auto; padding: 40px 14px; }
-.gh-modal .gh-card { max-width: 560px; position: relative; }
-.gh-close { position: absolute; top: 12px; right: 12px; }
-.gh-list { border: 1px solid var(--line, #242c38); border-radius: 8px; overflow: hidden; }
-.gh-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-top: 1px solid var(--line, #242c38); font-size: 14px; }
-.gh-item:first-child { border-top: 0; }
-.gh-item .gh-name { flex: 1; min-width: 0; }
-.gh-item .gh-sub { color: var(--muted, #8b949e); font-size: 12px; }
-.gh-empty { padding: 12px; color: var(--muted, #8b949e); font-size: 13.5px; }
-.gh-pill { font-size: 12px; border-radius: 999px; padding: 2px 9px; border: 1px solid var(--line, #242c38); color: var(--muted, #8b949e); white-space: nowrap; }
-.gh-pill.approved, .gh-pill.active { color: var(--pos, #199e70); border-color: var(--pos, #199e70); }
-.gh-pill.requested, .gh-pill.pending { color: #e3b341; border-color: #e3b341; }
-.gh-pill.declined, .gh-pill.disabled { color: var(--neg, #e66767); border-color: var(--neg, #e66767); }
-
-/* view-only mode */
-.gh-viewbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 12px 18px 0; padding: 10px 14px; border-radius: 10px;
-  background: rgba(227,179,65,.12); border: 1px solid #e3b341; color: var(--text, #e6edf3); font-size: 14px; }
-.gh-viewbar b { color: #e3b341; }
-.gh-viewbar .gh-btn { margin-left: auto; }
-body.ot-viewer .group[data-group="trading"], body.ot-viewer .group[data-group="goals"],
-body.ot-viewer .group[data-group="library"], body.ot-viewer .group[data-group="tools"],
-body.ot-viewer .tab[data-view="practice"],
-body.ot-viewer .rowbtn, body.ot-viewer .tile-tools, body.ot-viewer .tile-remove,
-body.ot-viewer [title="Remove from the dashboard"], body.ot-viewer [title^="Edit this chart"],
-body.ot-viewer #btnSaveView, body.ot-viewer #btnNewChart, body.ot-viewer #btnNewPosition,
-body.ot-viewer #btnBringMarks, body.ot-viewer #btnDismissMarks, body.ot-viewer #btnPendingImport,
-body.ot-viewer #btnPendingShow, body.ot-viewer #btnGoImport { display: none !important; }
-@media (max-width: 760px) {
-  .gh-chip-name { display: none; }
-  .gh-chip { position: fixed; top: 7px; right: 8px; z-index: 60; padding: 3px; background: var(--panel, #161b22); }
-  #groups { padding-right: 46px; }
-  .gh-viewbar { margin: 8px 10px 0; font-size: 13px; }
-}
-body.ot-viewer input.cell-edit { pointer-events: none; border-color: transparent !important; background: transparent !important; }
-</style>
-<script>
-/*
- * GitHub Pages bridge (build 2026-11-20).
- *
- * On Apps Script, google.script.run carries every call to Code.gs. Here this
- * defines a google.script.run that does the same over fetch: POST
- * { fn, args, token, as } to the data service (the Apps Script web app,
- * access "Anyone") and hand the reply to the same success / failure
- * handlers. rpc() and write() never know the difference.
- *
- *   token  the signed-in person's session (localStorage otSession)
- *   as     whose book to open when viewing someone else's (otViewAs)
- *
- * The server decides everything that matters — which workbook, whether a
- * viewer may call a function — so this file only arranges the screen.
- *
- * Content-Type text/plain keeps the POST a "simple" request: Apps Script does
- * not answer CORS preflights, and its reply (after a redirect to
- * script.googleusercontent.com) carries Access-Control-Allow-Origin: *.
- */
-(function () {
-  var EXEC = 'https://script.google.com/macros/s/AKfycbyK_WjZWNxxIINjAtFSRTn_nBctbH0WyYM8kqG0Sazw-T7aFAhhYr37yLV5QVboFJ7dqA/exec';
-  if (window.OT_EXEC) EXEC = window.OT_EXEC;   // the test harness points this at its fake
-  var SKEY = 'otSession', VKEY = 'otViewAs', LKEY = 'otLastUid';
-
-  /* What a viewer's page may ask for; screen preferences are answered here and never sent. */
-  var VIEW_OK = { ping: 1, bootstrap: 1, fetchReport: 1, fetchAggregate: 1, fetchAggregates: 1, fetchYearOverYear: 1,
-    drillDown: 1, getPosition: 1, getTradeSequence: 1, getPriceStatus: 1 };
-  var VIEW_NOOP = { saveUiState: 1, saveSettings: 1, saveView: 1, deleteView: 1, setDefaultView: 1, saveCustomChart: 1,
-    deleteCustomChart: 1, rebuildViewsIfDirty: 1 };
-  var VIEW_TABS = { dashboard: 1, trades: 1, viewer: 1 };
-  var VIEW_ONLY_MSG = 'View only — this is not your account.';
-
-  function getJson(k) { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
-  function setJson(k, v) { try { if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
-
-  var session = getJson(SKEY);
-  if (!session || !session.token) session = null;
-  var viewAs = session ? getJson(VKEY) : null;
-  var me = null;          // accountMe, once loaded
-
-  /* ---------------------------------------------------------------- transport */
-
-  function post(fn, args, useAs) {
-    var body = { fn: fn, args: args || [] };
-    if (session) body.token = session.token;
-    if (useAs && viewAs) body.as = viewAs.uid;
-    return fetch(EXEC, {
-      method: 'POST',
-      redirect: 'follow',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify(body)
-    }).then(function (r) {
-      return r.text().then(function (t) { return { status: r.status, text: t }; });
-    }, function () {
-      throw new Error('Could not reach the data service. Check your connection and try again.');
-    }).then(function (res) {
-      var j = null;
-      try { j = JSON.parse(res.text); } catch (e) {}
-      if (!j) {
-        throw new Error(/accounts\.google\.com|ServiceLogin|Sign in/i.test(res.text)
-          ? 'The data service asked Google for a sign-in: its deployment access must be “Anyone”.'
-          : 'The data service sent back something unexpected (HTTP ' + res.status + '). The latest Code.gs may not be deployed.');
-      }
-      if (j.__error) {
-        var err = new Error(j.__error);
-        err.auth = !!j.__auth; err.view = !!j.__view; err.viewOnly = !!j.__viewOnly;
-        throw err;
-      }
-      return j.r;
-    });
-  }
-
-  /* An app call: as the person being viewed, if any. */
-  function call(fn, args) {
-    if (!session) return new Promise(function () {});    // the sign-in screen is up; signing in reloads
-    if (viewAs) {
-      if (VIEW_NOOP[fn]) return Promise.resolve({ ok: true, viewOnly: true });
-      if (!VIEW_OK[fn]) return Promise.reject(new Error(VIEW_ONLY_MSG));
-    }
-    return post(fn, args, true).catch(function (err) {
-      if (err && err.auth) { signedOut('Please sign in again.'); return new Promise(function () {}); }
-      if (err && err.view) { setJson(VKEY, null); alert(err.message); location.reload(); return new Promise(function () {}); }
-      throw err;
-    });
-  }
-
-  /* An account call: always about the signed-in person. */
-  function acct(fn, args) {
-    return post(fn, args, false).then(function (r) {
-      if (r && r.ok === false) throw new Error(r.error || 'Something went wrong.');
-      return r;
-    }, function (err) {
-      if (err && err.auth) signedOut('Please sign in again.');
-      throw err;
-    });
-  }
-
-  /* google.script.run, as far as this page uses it. */
-  function runner() {
-    var ok = function () {}, fail = function (e) { console.error(e); };
-    var base = {
-      withSuccessHandler: function (f) { ok = f; return proxy; },
-      withFailureHandler: function (f) { fail = f; return proxy; },
-      withUserObject: function () { return proxy; }
-    };
-    var proxy = new Proxy(base, {
-      get: function (t, name) {
-        if (name in t) return t[name];
-        if (typeof name !== 'string') return undefined;
-        return function () {
-          var args = Array.prototype.slice.call(arguments);
-          call(name, args).then(function (r) { ok(r); }, function (e) { fail(e); });
-        };
-      }
-    });
-    return proxy;
-  }
-  var SCRIPT = { get run() { return runner(); } };
-  function attachScript() { window.google = window.google || {}; window.google.script = SCRIPT; }
-  attachScript();
-
-  /* ---------------------------------------------------------------- helpers */
-
-  function h(tag, attrs, kids) {
-    var n = document.createElement(tag);
-    Object.keys(attrs || {}).forEach(function (k) {
-      var v = attrs[k];
-      if (v === null || v === undefined || v === false) return;
-      if (k === 'text') n.textContent = v;
-      else if (k === 'class') n.className = v;
-      else if (k.slice(0, 2) === 'on') n.addEventListener(k.slice(2).toLowerCase(), v);
-      else n.setAttribute(k, v === true ? '' : v);
-    });
-    (kids || []).forEach(function (c) { if (c !== null && c !== undefined && c !== false) n.appendChild(typeof c === 'string' ? document.createTextNode(c) : c); });
-    return n;
-  }
-  function field(label, id, type, attrs) {
-    return [h('label', { for: id, text: label }), h('input', Object.assign({ id: id, type: type || 'text', spellcheck: 'false' }, attrs || {}))];
-  }
-  function val(root, id) { var n = root.querySelector('#' + id); return n ? n.value.trim() : ''; }
-  function say(root, text, tone) {
-    var m = root.querySelector('.gh-msg');
-    if (m) { m.textContent = text || ''; m.className = 'gh-msg' + (tone ? ' ' + tone : ''); }
-  }
-  function busyBtn(btn, on) { if (btn) btn.disabled = !!on; }
-  function initials(name) {
-    var p = String(name || '?').trim().split(/\s+/);
-    return ((p[0] || '?').charAt(0) + (p.length > 1 ? p[p.length - 1].charAt(0) : '')).toUpperCase();
-  }
-  function appToast(text, bad) { try { if (typeof window.toast === 'function') return window.toast(text, bad); } catch (e) {} }
-
-  /* Signing in as someone new on this browser: nothing of the last person's stays behind. */
-  function clearAppStorage(keep) {
-    try {
-      var keys = [];
-      for (var i = 0; i < localStorage.length; i++) keys.push(localStorage.key(i));
-      keys.forEach(function (k) { if (keep.indexOf(k) === -1) localStorage.removeItem(k); });
-    } catch (e) {}
-  }
-
-  function signedIn(res) {
-    var last = '';
-    try { last = localStorage.getItem(LKEY) || ''; } catch (e) {}
-    if (last && last !== res.user.uid) clearAppStorage([]);
-    setJson(SKEY, { token: res.token, user: res.user });
-    setJson(VKEY, null);
-    try { localStorage.setItem(LKEY, res.user.uid); } catch (e) {}
-    location.replace(location.pathname + location.search);
-  }
-
-  function signedOut(message) {
-    session = null; viewAs = null;
-    setJson(SKEY, null); setJson(VKEY, null);
-    showSignIn(message || '');
-  }
-
-  /* ---------------------------------------------------------------- sign-in screens */
-
-  var gate = null, cfg = null, pendingEmail = '';
-
-  function screen(nodes) {
-    if (!gate) {
-      gate = h('div', { class: 'gh-connect' });
-      (document.body || document.documentElement).appendChild(gate);
-    }
-    gate.innerHTML = '';
-    var card = h('form', { class: 'gh-card', autocomplete: 'on', novalidate: true }, nodes.concat([h('div', { class: 'gh-msg' })]));
-    gate.appendChild(card);
-    gate.hidden = false;
-    var first = card.querySelector('input');
-    if (first) setTimeout(function () { try { first.focus(); } catch (e) {} }, 30);
-    return card;
-  }
-
-  function afterAuth(card, res, email) {
-    if (res && res.token) return signedIn(res);
-    if (res && res.needCode) { pendingEmail = res.email || email; return showCode(); }
-    if (res && res.pending) return showPending(res.name);
-    say(card, (res && res.error) || 'Something went wrong.', 'bad');
-  }
-
-  function submit(card, btn, fn, args, email) {
-    say(card, 'One moment…');
-    busyBtn(btn, true);
-    post(fn, args, false).then(function (res) {
-      busyBtn(btn, false);
-      if (res && res.ok === false) { say(card, res.error, 'bad'); return; }
-      afterAuth(card, res, email);
-    }, function (err) { busyBtn(btn, false); say(card, err.message, 'bad'); });
-  }
-
-  function showSignIn(message) {
-    var card = screen([
-      h('h2', { text: 'Sign in to Options Trading' }),
-      h('p', { text: 'Your own trades, goals and Schwab connection. Market prices and estimates are shared.' }),
-      h('div', { id: 'ghGoogle' }),
-      h('div', { class: 'gh-or', id: 'ghOr', text: 'or' }),
-    ].concat(field('Email or phone', 'ghId', 'text', { autocomplete: 'username', placeholder: 'you@example.com or 602 555 0123' }))
-     .concat(field('Password', 'ghPw', 'password', { autocomplete: 'current-password' }))
-     .concat([
-      h('div', { class: 'gh-row' }, [h('button', { class: 'gh-btn primary wide', type: 'submit', id: 'ghGo', text: 'Sign in' })]),
-      h('div', { class: 'gh-links' }, [
-        h('button', { class: 'gh-link', type: 'button', text: 'Create an account', onClick: function () { showSignUp(); } }),
-        h('button', { class: 'gh-link', type: 'button', text: 'Forgot password?', onClick: function () { showForgot(); } })
-      ])
-    ]));
-    card.addEventListener('submit', function (e) {
-      e.preventDefault();
-      var id = val(card, 'ghId'), pw = card.querySelector('#ghPw').value;
-      if (!id || !pw) { say(card, 'Enter your email (or phone) and password.', 'bad'); return; }
-      submit(card, card.querySelector('#ghGo'), 'authLogin', [{ id: id, password: pw }], id);
-    });
-    if (message) say(card, message, 'bad');
-    googleButton(card);
-  }
-
-  function showSignUp() {
-    var card = screen([
-      h('h2', { text: 'Create an account' }),
-      h('p', { text: 'We’ll email you a code to confirm the address. Then Beau approves new accounts, usually the same day.' })
-    ].concat(field('Your name', 'ghName', 'text', { autocomplete: 'name' }))
-     .concat(field('Email', 'ghEmail', 'email', { autocomplete: 'email' }))
-     .concat(field('Password (8+ characters)', 'ghPw', 'password', { autocomplete: 'new-password' }))
-     .concat(field('Password again', 'ghPw2', 'password', { autocomplete: 'new-password' }))
-     .concat([
-      h('div', { class: 'gh-row' }, [h('button', { class: 'gh-btn primary wide', type: 'submit', id: 'ghGo', text: 'Create account' })]),
-      h('div', { class: 'gh-links' }, [h('button', { class: 'gh-link', type: 'button', text: '← Back to sign in', onClick: function () { showSignIn(); } })])
-    ]));
-    card.addEventListener('submit', function (e) {
-      e.preventDefault();
-      var pw = card.querySelector('#ghPw').value, pw2 = card.querySelector('#ghPw2').value;
-      if (pw !== pw2) { say(card, 'The two passwords are different.', 'bad'); return; }
-      var email = val(card, 'ghEmail');
-      submit(card, card.querySelector('#ghGo'), 'authSignup', [{ name: val(card, 'ghName'), email: email, password: pw }], email);
-    });
-  }
-
-  function showCode() {
-    var card = screen([
-      h('h2', { text: 'Check your email' }),
-      h('p', { text: 'We sent a 6-digit code to ' + pendingEmail + '. It works for 15 minutes (check spam if it hasn’t arrived).' })
-    ].concat(field('Code', 'ghCode', 'text', { inputmode: 'numeric', autocomplete: 'one-time-code', maxlength: '6' }))
-     .concat([
-      h('div', { class: 'gh-row' }, [h('button', { class: 'gh-btn primary wide', type: 'submit', id: 'ghGo', text: 'Confirm' })]),
-      h('div', { class: 'gh-links' }, [
-        h('button', { class: 'gh-link', type: 'button', text: '← Back to sign in', onClick: function () { showSignIn(); } }),
-        h('button', { class: 'gh-link', type: 'button', text: 'Send a new code', onClick: function () {
-          post('authResendCode', [{ email: pendingEmail }], false).then(function () { say(card, 'A new code is on its way.', 'good'); });
-        } })
-      ])
-    ]));
-    card.addEventListener('submit', function (e) {
-      e.preventDefault();
-      submit(card, card.querySelector('#ghGo'), 'authVerifyEmail', [{ email: pendingEmail, code: val(card, 'ghCode') }], pendingEmail);
-    });
-  }
-
-  function showPending(name) {
-    screen([
-      h('h2', { text: 'Thanks' + (name ? ', ' + name : '') + '!' }),
-      h('p', { text: 'Your account is waiting for Beau to approve it. You’ll get an email when it’s ready, then sign in here the same way.' }),
-      h('div', { class: 'gh-row' }, [h('button', { class: 'gh-btn', type: 'button', text: 'Back to sign in', onClick: function () { showSignIn(); } })])
-    ]);
-  }
-
-  function showForgot() {
-    var card = screen([
-      h('h2', { text: 'Reset your password' }),
-      h('p', { text: 'Enter the email on your account and we’ll send a reset code.' })
-    ].concat(field('Email', 'ghEmail', 'email', { autocomplete: 'email' }))
-     .concat([
-      h('div', { class: 'gh-row' }, [h('button', { class: 'gh-btn primary wide', type: 'submit', id: 'ghGo', text: 'Send code' })]),
-      h('div', { class: 'gh-links' }, [h('button', { class: 'gh-link', type: 'button', text: '← Back to sign in', onClick: function () { showSignIn(); } })])
-    ]));
-    card.addEventListener('submit', function (e) {
-      e.preventDefault();
-      var email = val(card, 'ghEmail');
-      if (!email) { say(card, 'Enter your email.', 'bad'); return; }
-      busyBtn(card.querySelector('#ghGo'), true);
-      post('authForgot', [{ email: email }], false).then(function () { pendingEmail = email; showReset(); },
-        function (err) { busyBtn(card.querySelector('#ghGo'), false); say(card, err.message, 'bad'); });
-    });
-  }
-
-  function showReset() {
-    var card = screen([
-      h('h2', { text: 'Choose a new password' }),
-      h('p', { text: 'If ' + pendingEmail + ' has an account, a code is on its way. This signs you out everywhere else.' })
-    ].concat(field('Code', 'ghCode', 'text', { inputmode: 'numeric', autocomplete: 'one-time-code', maxlength: '6' }))
-     .concat(field('New password (8+ characters)', 'ghPw', 'password', { autocomplete: 'new-password' }))
-     .concat([
-      h('div', { class: 'gh-row' }, [h('button', { class: 'gh-btn primary wide', type: 'submit', id: 'ghGo', text: 'Save and sign in' })]),
-      h('div', { class: 'gh-links' }, [h('button', { class: 'gh-link', type: 'button', text: '← Back to sign in', onClick: function () { showSignIn(); } })])
-    ]));
-    card.addEventListener('submit', function (e) {
-      e.preventDefault();
-      submit(card, card.querySelector('#ghGo'), 'authReset', [{ email: pendingEmail, code: val(card, 'ghCode'), password: card.querySelector('#ghPw').value }], pendingEmail);
-    });
-  }
-
-  /* Google's own button, when Beau has added the Client ID (Trading App menu). */
-  function googleButton(card) {
-    var slot = card.querySelector('#ghGoogle'), or = card.querySelector('#ghOr');
-    var hide = function () { if (slot) slot.style.display = 'none'; if (or) or.style.display = 'none'; };
-    var draw = function () {
-      if (!cfg || !cfg.googleClientId) return hide();
-      var gis = window.google && window.google.accounts && window.google.accounts.id;
-      if (!gis) return;
-      gis.initialize({ client_id: cfg.googleClientId, callback: function (resp) {
-        submit(card, null, 'authGoogle', [resp.credential], '');
-      } });
-      gis.renderButton(slot, { theme: 'filled_black', size: 'large', text: 'signin_with', shape: 'pill', width: 300 });
-    };
-    var load = function () {
-      if (!cfg || !cfg.googleClientId) return hide();
-      if (window.google && window.google.accounts && window.google.accounts.id) return draw();
-      var s = document.createElement('script');
-      s.src = 'https://accounts.google.com/gsi/client';
-      s.async = true;
-      s.onload = function () { attachScript(); draw(); };   // Google's script must not take google.script with it
-      s.onerror = hide;
-      document.head.appendChild(s);
-    };
-    if (cfg) return load();
-    post('authConfig', [], false).then(function (c) { cfg = c || {}; load(); }, hide);
-  }
-
-  /* ---------------------------------------------------------------- account menu */
-
-  var menu = null;
-
-  function chip() {
-    var right = document.querySelector('.topbar-right');
-    if (!right || document.getElementById('ghChip')) return;
-    var u = (me && me.user) || (session && session.user) || {};
-    var badge = me && me.pendingMembers ? h('span', { class: 'gh-badge', text: String(me.pendingMembers) }) : null;
-    var waiting = me ? me.viewers.filter(function (v) { return v.status === 'requested'; }).length : 0;
-    var b = h('button', { class: 'gh-chip', id: 'ghChip', type: 'button', title: 'Your account', onClick: function (e) { e.stopPropagation(); toggleMenu(b); } }, [
-      h('span', { class: 'gh-avatar', text: initials(u.name) }),
-      h('span', { class: 'gh-chip-name', text: u.name || 'Account' }),
-      badge || (waiting ? h('span', { class: 'gh-badge', text: String(waiting) }) : null)
-    ]);
-    var refresh = document.getElementById('btnRefresh');
-    right.insertBefore(b, refresh ? refresh.nextSibling : null);
-  }
-
-  function repaintChip() { var c = document.getElementById('ghChip'); if (c) c.remove(); chip(); }
-
-  function toggleMenu(anchor) {
-    if (menu && !menu.hidden) { menu.hidden = true; return; }
-    if (!menu) {
-      menu = h('div', { class: 'gh-menu', hidden: true });
-      document.body.appendChild(menu);
-      document.addEventListener('click', function (e) { if (menu && !menu.contains(e.target)) menu.hidden = true; });
-    }
-    menu.innerHTML = '';
-    var u = (me && me.user) || (session && session.user) || {};
-    var item = function (text, fn) { return h('button', { type: 'button', text: text, onClick: function () { menu.hidden = true; fn(); } }); };
-    menu.appendChild(h('div', { class: 'gh-head', text: 'Signed in as ' + (u.name || '') }));
-    if (viewAs) menu.appendChild(item('← Back to my account', stopViewing));
-    menu.appendChild(item('My account', openAccount));
-    var waiting = me ? me.viewers.filter(function (v) { return v.status === 'requested'; }).length : 0;
-    menu.appendChild(item('Sharing' + (waiting ? ' (' + waiting + ' waiting)' : ''), function () { openAccount('sharing'); }));
-    menu.appendChild(h('div', { class: 'gh-sep' }));
-    menu.appendChild(h('div', { class: 'gh-head', text: 'View a member’s trades' }));
-    ((me && me.canView) || []).forEach(function (v) {
-      menu.appendChild(item((viewAs && viewAs.uid === v.uid ? '✓ ' : '') + 'View ' + v.name, function () { startViewing(v); }));
-    });
-    menu.appendChild(item('Ask to view a member’s trades…', openDirectory));
-    if (u.role === 'admin') {
-      menu.appendChild(h('div', { class: 'gh-sep' }));
-      menu.appendChild(item('Admin → Members' + (me && me.pendingMembers ? ' (' + me.pendingMembers + ' waiting)' : ''), openAdmin));
-    }
-    menu.appendChild(h('div', { class: 'gh-sep' }));
-    menu.appendChild(item('Sign out', function () {
-      clearAppStorage([LKEY]);
-      location.replace(location.pathname + location.search);
-    }));
-    var r = anchor.getBoundingClientRect();
-    menu.style.top = (r.bottom + 6) + 'px';
-    menu.style.right = Math.max(8, window.innerWidth - r.right) + 'px';
-    menu.hidden = false;
-  }
-
-  function startViewing(v) {
-    setJson(VKEY, { uid: v.uid, name: v.name });
-    location.replace(location.pathname + location.search);
-  }
-  function stopViewing() {
-    setJson(VKEY, null);
-    location.replace(location.pathname + location.search);
-  }
-
-  function loadMe() {
-    return acct('accountMe', []).then(function (r) { me = r; repaintChip(); return r; }, function () { return null; });
-  }
-
-  /* ---------------------------------------------------------------- dialogs */
-
-  function modal(title, build) {
-    var wrap = h('div', { class: 'gh-modal', onClick: function (e) { if (e.target === wrap) wrap.remove(); } });
-    var card = h('div', { class: 'gh-card' }, [
-      h('button', { class: 'gh-btn sm gh-close', type: 'button', text: 'Close', onClick: function () { wrap.remove(); } }),
-      h('h2', { text: title })
-    ]);
-    wrap.appendChild(card);
-    document.body.appendChild(wrap);
-    build(card, wrap);
-    return wrap;
-  }
-
-  function pill(status) {
-    var text = { none: 'No access', requested: 'Pending', approved: 'Has access', declined: 'Declined', removed: 'No access',
-      pending: 'Waiting', active: 'Active', disabled: 'Switched off' }[status] || status;
-    return h('span', { class: 'gh-pill ' + status, text: text });
-  }
-
-  function openAccount(focus) {
-    modal('My account', function (card, wrap) {
-      var u = (me && me.user) || {};
-      var msg = h('div', { class: 'gh-msg' });
-      var note = function (t, tone) { msg.textContent = t; msg.className = 'gh-msg' + (tone ? ' ' + tone : ''); };
-
-      card.appendChild(h('h3', { text: 'Profile' }));
-      field('Name', 'gaName', 'text', { value: u.name || '' }).forEach(function (n) { card.appendChild(n); });
-      field('Email', 'gaEmail', 'email', { value: u.email || '', readonly: true }).forEach(function (n) { card.appendChild(n); });
-      field('Phone (lets you sign in with your phone and the same password)', 'gaPhone', 'tel', { value: u.phone || '', placeholder: '602 555 0123' }).forEach(function (n) { card.appendChild(n); });
-      card.appendChild(h('div', { class: 'gh-row' }, [h('button', { class: 'gh-btn primary', type: 'button', text: 'Save profile', onClick: function (e) {
-        var b = e.target; busyBtn(b, true);
-        acct('accountUpdate', [{ name: val(card, 'gaName'), phone: val(card, 'gaPhone') }]).then(function (r) {
-          busyBtn(b, false); me.user = r.user; card.querySelector('#gaPhone').value = r.user.phone || ''; repaintChip(); note('Saved.', 'good');
-        }, function (err) { busyBtn(b, false); note(err.message, 'bad'); });
-      } })]));
-
-      card.appendChild(h('h3', { text: u.hasPassword ? 'Change password' : 'Set a password' }));
-      if (!u.hasPassword) card.appendChild(h('p', { text: 'You sign in with Google. A password also lets you sign in with your email or phone.' }));
-      if (u.hasPassword) field('Current password', 'gaCur', 'password', { autocomplete: 'current-password' }).forEach(function (n) { card.appendChild(n); });
-      field('New password (8+ characters)', 'gaNew', 'password', { autocomplete: 'new-password' }).forEach(function (n) { card.appendChild(n); });
-      card.appendChild(h('div', { class: 'gh-row' }, [h('button', { class: 'gh-btn', type: 'button', text: 'Save password', onClick: function (e) {
-        var b = e.target; busyBtn(b, true);
-        acct('accountSetPassword', [{ current: (card.querySelector('#gaCur') || {}).value || '', password: card.querySelector('#gaNew').value }]).then(function (r) {
-          busyBtn(b, false); me.user = r.user; note('Password saved.', 'good'); card.querySelector('#gaNew').value = '';
-        }, function (err) { busyBtn(b, false); note(err.message, 'bad'); });
-      } })]));
-
-      var share = h('div', { id: 'gaSharing' });
-      card.appendChild(share);
-      paintSharing(share, note);
-      card.appendChild(msg);
-
-      card.appendChild(h('h3', { text: 'Security' }));
-      card.appendChild(h('div', { class: 'gh-row' }, [h('button', { class: 'gh-btn', type: 'button', text: 'Sign out on every device', onClick: function () {
-        if (!confirm('Sign out on every device, including this one?')) return;
-        acct('accountSignOutEverywhere', []).then(function () { signedOut('You were signed out everywhere.'); wrap.remove(); }, function (err) { note(err.message, 'bad'); });
-      } })]));
-      if (focus === 'sharing') setTimeout(function () { share.scrollIntoView({ block: 'start' }); }, 50);
-    });
-  }
-
-  function paintSharing(box, note) {
-    box.innerHTML = '';
-    box.appendChild(h('h3', { text: 'Who can view my trades' }));
-    box.appendChild(h('p', { text: 'Viewers see your Dashboard and Trades only — never your Schwab account, goals, settings or anything else — and cannot change anything.' }));
-    var list = h('div', { class: 'gh-list' });
-    var viewers = (me && me.viewers) || [];
-    if (!viewers.length) list.appendChild(h('div', { class: 'gh-empty', text: 'Nobody yet. Members ask from their own menu; you’ll get an email.' }));
-    viewers.forEach(function (v) {
-      var acts = v.status === 'requested'
-        ? [h('button', { class: 'gh-btn sm primary', type: 'button', text: 'Approve', onClick: function () { decide(v, true); } }),
-           h('button', { class: 'gh-btn sm', type: 'button', text: 'Decline', onClick: function () { decide(v, false); } })]
-        : [h('button', { class: 'gh-btn sm', type: 'button', text: 'Remove', onClick: function () {
-            if (confirm('Stop ' + v.name + ' viewing your trades?')) acct('accessRemove', [v.id]).then(again, fail);
-          } })];
-      list.appendChild(h('div', { class: 'gh-item' }, [h('div', { class: 'gh-name', text: v.name }), pill(v.status)].concat(acts)));
-    });
-    box.appendChild(list);
-
-    box.appendChild(h('h3', { text: 'Trades I can view' }));
-    var list2 = h('div', { class: 'gh-list' });
-    var cv = (me && me.canView) || [];
-    if (!cv.length) list2.appendChild(h('div', { class: 'gh-empty', text: 'None yet.' }));
-    cv.forEach(function (v) {
-      list2.appendChild(h('div', { class: 'gh-item' }, [
-        h('div', { class: 'gh-name', text: v.name }),
-        h('button', { class: 'gh-btn sm primary', type: 'button', text: 'View', onClick: function () { startViewing(v); } }),
-        h('button', { class: 'gh-btn sm', type: 'button', text: 'Stop', onClick: function () {
-          if (confirm('Stop viewing ' + v.name + '’s trades? You’d have to ask again.')) acct('accessRemove', [v.id]).then(again, fail);
-        } })
-      ]));
-    });
-    box.appendChild(list2);
-    box.appendChild(h('div', { class: 'gh-row' }, [h('button', { class: 'gh-btn', type: 'button', text: 'Ask to view a member’s trades…', onClick: openDirectory })]));
-
-    function again() { loadMe().then(function () { paintSharing(box, note); }); }
-    function fail(err) { note(err.message, 'bad'); }
-    function decide(v, yes) { acct('accessDecide', [v.id, yes]).then(function () { note(yes ? v.name + ' can now view your trades.' : 'Declined.', 'good'); again(); }, fail); }
-  }
-
-  function openDirectory() {
-    modal('Members', function (card) {
-      card.appendChild(h('p', { text: 'Pick a member to ask to view their Dashboard and Trades. They’ll get an email and can approve or decline.' }));
-      var list = h('div', { class: 'gh-list' }, [h('div', { class: 'gh-empty', text: 'Loading…' })]);
-      card.appendChild(list);
-      var msg = h('div', { class: 'gh-msg' });
-      card.appendChild(msg);
-      var paint = function () {
-        acct('accessDirectory', []).then(function (r) {
-          list.innerHTML = '';
-          if (!r.members.length) list.appendChild(h('div', { class: 'gh-empty', text: 'No other members yet.' }));
-          r.members.forEach(function (m) {
-            var act;
-            if (m.status === 'approved') act = h('button', { class: 'gh-btn sm primary', type: 'button', text: 'View', onClick: function () { startViewing(m); } });
-            else if (m.status === 'requested') act = h('button', { class: 'gh-btn sm', type: 'button', text: 'Waiting', disabled: true });
-            else act = h('button', { class: 'gh-btn sm primary', type: 'button', text: m.status === 'declined' ? 'Ask again' : 'Ask to view', onClick: function (e) {
-              busyBtn(e.target, true);
-              acct('accessRequest', [m.uid]).then(function () {
-                msg.textContent = 'Request sent — ' + m.name + ' will get an email.'; msg.className = 'gh-msg good'; paint();
-              }, function (err) { busyBtn(e.target, false); msg.textContent = err.message; msg.className = 'gh-msg bad'; });
-            } });
-            list.appendChild(h('div', { class: 'gh-item' }, [
-              h('span', { class: 'gh-avatar', text: initials(m.name) }), h('div', { class: 'gh-name', text: m.name }), pill(m.status), act
-            ]));
-          });
-        }, function (err) { list.innerHTML = ''; list.appendChild(h('div', { class: 'gh-empty', text: err.message })); });
-      };
-      paint();
-    });
-  }
-
-  function openAdmin() {
-    modal('Members (admin)', function (card) {
-      card.appendChild(h('p', { text: 'New accounts wait here until you approve them. Approving makes their own workbook in your Google Drive.' }));
-      var list = h('div', { class: 'gh-list' }, [h('div', { class: 'gh-empty', text: 'Loading…' })]);
-      var msg = h('div', { class: 'gh-msg' });
-      card.appendChild(list); card.appendChild(msg);
-      var paint = function () {
-        acct('adminUsers', []).then(function (r) {
-          list.innerHTML = '';
-          var order = { pending: 0, active: 1, disabled: 2 };
-          r.members.sort(function (a, b) { return (order[a.status] - order[b.status]) || a.name.localeCompare(b.name); });
-          r.members.forEach(function (m) {
-            var acts = [];
-            var set = function (status, label) {
-              return h('button', { class: 'gh-btn sm' + (status === 'active' ? ' primary' : ''), type: 'button', text: label, onClick: function (e) {
-                busyBtn(e.target, true);
-                acct('adminSetStatus', [m.uid, status]).then(function () { paint(); loadMe(); }, function (err) { busyBtn(e.target, false); msg.textContent = err.message; msg.className = 'gh-msg bad'; });
-              } });
-            };
-            if (m.uid !== 'home') {
-              if (m.status === 'pending') acts.push(m.emailVerified ? set('active', 'Approve') : h('span', { class: 'gh-sub', text: 'email not confirmed yet' }));
-              if (m.status === 'active') acts.push(set('disabled', 'Switch off'));
-              if (m.status === 'disabled') acts.push(set('active', 'Switch on'));
-            }
-            list.appendChild(h('div', { class: 'gh-item' }, [
-              h('div', { class: 'gh-name' }, [h('div', { text: m.name + (m.uid === 'home' ? ' (you)' : '') }),
-                h('div', { class: 'gh-sub', text: m.email + (m.phone ? ' · ' + m.phone : '') + (m.google ? ' · Google' : '') })]),
-              pill(m.status)
-            ].concat(acts)));
-          });
-        }, function (err) { list.innerHTML = ''; list.appendChild(h('div', { class: 'gh-empty', text: err.message })); });
-      };
-      paint();
-    });
-  }
-
-  /* ---------------------------------------------------------------- view-only mode */
-
-  function viewerMode() {
-    document.body.classList.add('ot-viewer');
-    var bar = h('div', { class: 'gh-viewbar', id: 'ghViewbar', role: 'status' }, [
-      h('span', {}, ['👁 ', h('b', { text: 'View only' }), ' — you’re looking at ', h('b', { text: viewAs.name + '’s' }),
-        ' trades. This is not your account; nothing can be changed.']),
-      h('button', { class: 'gh-btn sm', type: 'button', text: 'Back to my account', onClick: stopViewing })
-    ]);
-    var tabs = document.getElementById('tabs');
-    var header = document.querySelector('header');
-    var after = tabs || header;
-    if (after && after.parentNode) after.parentNode.insertBefore(bar, after.nextSibling);
-    else document.body.insertBefore(bar, document.body.firstChild);
-
-    // Only Dashboard, Trades and Trade Viewer; writes never leave the page.
-    if (typeof window.showTab === 'function') {
-      var show = window.showTab;
-      window.showTab = function (view) { return show.call(this, VIEW_TABS[view] ? view : 'dashboard'); };
-    }
-    if (typeof window.write === 'function') {
-      window.write = function (name) {
-        if (VIEW_NOOP[name]) return Promise.resolve({ ok: true, viewOnly: true });
-        appToast(VIEW_ONLY_MSG, true);
-        return Promise.resolve({ ok: false, error: VIEW_ONLY_MSG });
-      };
-    }
-    document.title = viewAs.name + '’s trades (view only) — Options Trading';
-  }
-
-  /* ---------------------------------------------------------------- start */
-
-  function boot() {
-    if (!session) { showSignIn(''); return; }
-    if (viewAs) viewerMode();
-    chip();
-    loadMe();
-  }
-  // Registered before the app's own DOMContentLoaded handler, so the view-only
-  // wrappers are in place before the app starts.
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
-  else boot();
-
-  window.otAccount = { open: openAccount, members: openDirectory, signOut: function () { signedOut(''); } };
-})();
-</script>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <!-- TradingView's open-source candlestick charts (Apache 2.0), for the Trading tabs. -->
@@ -4704,13 +3991,51 @@ function bringMarksAcross(button) {
  */
 function renderHeaderFigures() {
   var m = (S.report && S.report.metrics) || {};
-  $('#hdrBalance').textContent = m.balance === undefined ? '—' : money(m.balance);
+  // Value: cash + assigned shares at cost. Seamless through an assignment (build 2026-11-22).
+  $('#hdrValue').textContent = m.value === undefined && m.balance === undefined ? '—' : money(m.value !== undefined ? m.value : m.balance);
+  var mb = marketBalanceNow();
+  $('#hdrBalance').textContent = mb.value === null ? '—' : money(mb.value);
+  $('#hdrBalanceFig').title = mb.shares
+    ? 'Cash ' + money(m.cash || 0) + ' plus ' + mb.shares + ' shares at the market (' + money(mb.sharesValue) + ', ' + mb.source + ')'
+    : 'Cash, collateral and unused — no shares held';
   var avail = m.available;
   var el2 = $('#hdrAvailable');
   el2.textContent = avail === undefined ? '—' : money(avail);
   el2.style.color = avail < 0 ? 'var(--neg)' : '';
-  el2.title = 'Balance ' + money(m.balance || 0) + ' less ' +
+  el2.title = 'Cash ' + money(m.cash !== undefined ? m.cash : (m.balance || 0)) + ' less ' +
     money(m.collateralAtRisk || 0) + ' of collateral behind open puts';
+}
+
+/*
+ * The account at the market: cash plus every share held at its live price
+ * (the last close when there is none). The server's figure uses the last
+ * close; this moves it with the quotes the page already holds.
+ */
+function marketBalanceNow() {
+  var m = (S.report && S.report.metrics) || {};
+  if (m.cash === undefined) return { value: m.balance === undefined ? null : m.balance, shares: 0, sharesValue: 0, source: '' };
+  var held = ((S.report && S.report.holdings) || []).filter(function (h) { return h.open && h.shares > 0; });
+  var total = 0, shares = 0, live = false;
+  held.forEach(function (h) {
+    var px = holdingPrice(h);
+    if (px.live) live = true;
+    px = px.price;
+    total += px * h.shares;
+    shares += h.shares;
+  });
+  if (held.length) needQuotes(held.map(function (h) { return h.symbol; }));
+  return { value: Math.round((m.cash + total) * 100) / 100, shares: shares, sharesValue: total,
+           source: live ? 'live price' : 'last close' };
+}
+
+/* A held stock's price now: the live quote, else the server's last close, else what it cost. */
+function holdingPrice(h) {
+  var q = S.quotes[String(h.symbol || '').toUpperCase()];
+  if (q && typeof q.price === 'number' && q.price > 0 && q.source !== 'MARK') {
+    return { price: q.price, live: q.source === 'LIVE', label: quoteLabel(q) };
+  }
+  if (h.marketPrice) return { price: h.marketPrice, live: false, label: 'Last close' + (h.marketAsOf ? ' ' + fmtDate(h.marketAsOf) : '') };
+  return { price: h.avgPrice || h.assignedStrike || 0, live: false, label: 'No price yet — shown at cost' };
 }
 
 /* ------------------------------------------------ dashboard: drag to reorder */
@@ -4964,7 +4289,9 @@ function renderTiles() {
     var def = S.metricCatalog[key];
     if (!def) return;
     var raw = metrics[key];
-    var isBalanceLike = key === 'balance' || key === 'collateralAtRisk'
+    // At the market, live: moves with the quotes like the header does.
+    if (key === 'marketBalance') raw = marketBalanceNow().value;
+    var isBalanceLike = key === 'balance' || key === 'collateralAtRisk' || key === 'marketBalance' || key === 'cash'
       || key === 'totalDeposits' || key === 'totalFees';
     var text = def.format === 'currency'
         ? (isBalanceLike ? money(raw) : signedMoney(raw))
@@ -4989,6 +4316,10 @@ function renderTiles() {
     if (key === 'winRate' && metrics.winRateClosed) {
       suffix = el('span', { class: 'tile-note',
         text: ' (' + metrics.winRateWins + ' of ' + metrics.winRateClosed + ')' });
+      // A win is a trade that finished without being assigned (build 2026-11-22).
+      if (metrics.winRateAssigned) {
+        below = el('div', { class: 'tile-sub', text: metrics.winRateAssigned + ' assigned \u2014 not counted as wins' });
+      }
     }
 
     var note = scopeNote(def, metrics);
@@ -5054,6 +4385,13 @@ function renderOpenPositions() {
     .map(function (p) {
       var m = markByChain[p.positionId];
       var b = basisByChain[p.positionId];
+      /*
+       * A covered call on assigned shares is the next step of the put's
+       * trade (build 2026-11-22), so Premium, Return, Weekly and Life are the
+       * WHOLE trade: the put (and its rolls) plus every call so far, on the
+       * capital the shares cost, from the first put sale.
+       */
+      var g = p.group && p.optionType === 'CALL' ? p.group : null;
       return {
         positionId: p.positionId,
         underlying: p.underlying,
@@ -5063,12 +4401,13 @@ function renderOpenPositions() {
         expiration: p.expiration,
         days: daysUntil(p.expiration),
         startMark: m ? m.mark : null,
-        collateral: p.collateral,
-        net: p.net,
-        returnPct: p.returnPct,
-        weeklyReturnPct: p.weeklyReturnPct,
-        weeklyNet: p.weeklyNet,
-        lifeDays: p.lifeDays,
+        collateral: g ? g.collateral : p.collateral,
+        group: g,
+        net: g ? g.net : p.net,
+        returnPct: g ? g.returnPct : p.returnPct,
+        weeklyReturnPct: g ? g.weeklyReturnPct : p.weeklyReturnPct,
+        weeklyNet: g ? (g.lifeWeeks ? g.net / g.lifeWeeks : null) : p.weeklyNet,
+        lifeDays: g ? g.lifeDays : p.lifeDays,
         rollCount: p.rolls,
         costBasis: b ? b.basis : null,
         basisProjected: b ? b.projected : false,
@@ -5120,25 +4459,31 @@ function renderOpenPositions() {
       el('td', { class: 'num', text: p.days === null ? '—' : String(p.days) }),
       earningsCell(p.earningsDate, p.expiration),
       el('td', { class: 'num', text: p.startMark === null ? '—' : money(p.startMark) }),
-      el('td', { class: 'num', text: money(p.collateral, 0) }),
+      el('td', { class: 'num', title: p.group ? 'Covered by the ' + num(p.group.shares, 0) + ' assigned shares (bought at ' + money(p.group.assignedStrike) + '); no cash is held back for it' : '',
+                 text: money(p.collateral, 0) }),
       el('td', {
         class: 'num' + (p.net > 0 ? ' pos' : p.net < 0 ? ' neg' : ''),
         // Said out loud on every row, because "is this the whole trade or
         // just the latest leg" is not a question a column heading settles.
-        title: p.rollCount
+        title: p.group
+          ? 'The whole assigned trade: puts ' + signedMoney(p.group.putNet) + ' + calls ' + signedMoney(p.group.callNet) +
+            ' across ' + p.group.contracts + ' contracts'
+          : p.rollCount
           ? 'Across all ' + (p.rollCount + 1) + ' contracts of this trade, ' +
             'including what the roll-outs cost'
           : 'This contract, since it was sold',
         text: signedMoney(p.net)
       }),
-      el('td', { class: 'num', text: signedPct(p.returnPct) }),
+      el('td', { class: 'num', title: p.group ? 'Puts and calls together, on the ' + money(p.group.collateral, 0) + ' the shares cost' : '',
+                 text: signedPct(p.returnPct) }),
       el('td', {
         class: 'num' + (weeklyLow(p.weeklyReturnPct) ? ' neg' : ''),
         title: p.weeklyNet === null ? ''
           : signedMoney(p.weeklyNet) + ' a week over ' + p.lifeDays + ' days',
         text: p.weeklyReturnPct === null ? '\u2014' : signedPct(p.weeklyReturnPct)
       }),
-      el('td', { class: 'num', text: p.lifeDays === null ? '\u2014' : p.lifeDays + 'd' }),
+      el('td', { class: 'num', title: p.group ? 'From the first put sale (' + fmtDate(p.group.assignedDate) + ' assigned)' : '',
+                 text: p.lifeDays === null ? '\u2014' : p.lifeDays + 'd' }),
       el('td', { class: 'num', title: quoteLabel(p.marketInfo),
                  text: p.market === null ? '\u2014' : money(p.market) }),
       el('td', { class: 'num' + (p.itmPct ? ' neg' : ''),
@@ -6608,7 +5953,8 @@ function buildChart(key, ctx) {
         labels: bucketsBD.rows.map(function (r) { return r.label; }),
         datasets: [
           {
-            label: 'Balance',
+            // The account's Value (cash + assigned shares at cost): an assignment does not dent it (build 2026-11-22).
+            label: 'Value',
             data: bd.map(function (r) { return r.balance; }),
             borderColor: accent, borderWidth: 2,
             pointRadius: 0, pointHoverRadius: 5,
@@ -7098,8 +6444,10 @@ function tradePositions(legs) {
     var p = rp[pid];
     var sum = function (k) { return group.reduce(function (a, t) { return a + (Number(t[k]) || 0); }, 0); };
     var first = opens.length ? opens[opens.length - 1] : group[group.length - 1];
-    var net = p ? p.net : sum('net');
-    var collateral = p ? p.collateral : (lead.strike || 0) * (lead.qty || 0) * 100;
+    // A covered call on assigned shares reads as the whole assigned trade (build 2026-11-22).
+    var g = p && p.group && lead.optionType === 'CALL' ? p.group : null;
+    var net = g ? g.net : p ? p.net : sum('net');
+    var collateral = g ? g.collateral : p ? p.collateral : (lead.strike || 0) * (lead.qty || 0) * 100;
     var credits = p ? p.premiumSold : group.reduce(function (a, t) {
       return a + ((t.action === 'SELL_TO_OPEN' || t.action === 'SELL_TO_CLOSE') ? Math.abs(Number(t.gross) || 0) || (Number(t.price) || 0) * (Number(t.qty) || 0) * 100 : 0);
     }, 0);
@@ -7129,9 +6477,10 @@ function tradePositions(legs) {
       collateral: collateral,
       fees: p ? p.fees : sum('fees'),
       net: net,
-      returnPct: p ? p.returnPct : (collateral ? net / collateral : null),
-      weeklyReturnPct: p ? p.weeklyReturnPct : null,
-      lifeDays: p ? p.lifeDays : null,
+      returnPct: g ? g.returnPct : p ? p.returnPct : (collateral ? net / collateral : null),
+      weeklyReturnPct: g ? g.weeklyReturnPct : p ? p.weeklyReturnPct : null,
+      lifeDays: g ? g.lifeDays : p ? p.lifeDays : null,
+      group: g,
       costBasis: lead.costBasis,
       basisProjected: lead.basisProjected,
       outcome: isOpen ? 'OPEN' : ((p && p.outcome) || lead.outcome || ''),
@@ -7313,8 +6662,11 @@ function tradePositionRow(p, open) {
                text: p.price ? money(p.price) : '—' }),
     el('td', { class: 'num', text: p.collateral ? money(p.collateral, 0) : '—' }),
     el('td', { class: 'num', text: p.fees ? money(p.fees) : '—' }),
-    el('td', { class: 'num' + (p.net > 0 ? ' pos' : p.net < 0 ? ' neg' : ''), text: signedMoney(p.net) }),
-    el('td', { class: 'num strong', text: p.returnPct === null || p.returnPct === undefined ? '—' : signedPct(p.returnPct) }),
+    el('td', { class: 'num' + (p.net > 0 ? ' pos' : p.net < 0 ? ' neg' : ''),
+               title: p.group ? 'The whole assigned trade: puts ' + signedMoney(p.group.putNet) + ' + calls ' + signedMoney(p.group.callNet) : '',
+               text: signedMoney(p.net) }),
+    el('td', { class: 'num strong', title: p.group ? 'Puts and calls together, on the ' + money(p.group.collateral, 0) + ' the shares cost' : '',
+               text: p.returnPct === null || p.returnPct === undefined ? '—' : signedPct(p.returnPct) }),
     el('td', { class: 'num pos-only strong' + (weeklyLow(p.weeklyReturnPct) ? ' neg' : ''),
                title: weeklyLow(p.weeklyReturnPct) ? 'Under the 1% a week target' : '',
                text: p.weeklyReturnPct === null || p.weeklyReturnPct === undefined ? '—' : signedPct(p.weeklyReturnPct) }),
@@ -7490,8 +6842,12 @@ function seqCell(t) {
     title = 'Closes contract ' + t.seq + ' of this trade';
   } else if (t.seq === 1) {
     label = '1 first'; cls = 'seq first';
-    title = t.seqCount > 1 ? 'First sale of this trade — rolled ' + (t.seqCount - 1) + (t.seqCount === 2 ? ' time' : ' times') + ' since'
+    title = t.groupId ? 'First sale of this trade — assigned, with covered calls after (' + t.seqCount + ' contracts in all)'
+          : t.seqCount > 1 ? 'First sale of this trade — rolled ' + (t.seqCount - 1) + (t.seqCount === 2 ? ' time' : ' times') + ' since'
                            : 'First sale of this trade';
+  } else if (t.groupId && t.optionType === 'CALL') {
+    label = String(t.seq); cls = 'seq';
+    title = 'Covered call on the assigned shares (contract ' + t.seq + ' of ' + t.seqCount + ' in this trade)';
   } else {
     label = String(t.seq); cls = 'seq';
     title = 'Roll ' + (t.seq - 1) + ' of this trade (contract ' + t.seq + ' of ' + t.seqCount + ')';
@@ -7557,6 +6913,7 @@ function loadQuotes(symbols) {
     if (!res || !res.ok) return;
     (symbols || []).forEach(function (sym) { S.quotes[sym] = res.quotes[sym] || { price: null }; });
     renderOpenPositions();
+    renderHeaderFigures(); renderHoldings();
     if (S.viewerData) { paintViewerItm(S.viewerData); paintViewerResearch(S.viewerData); }
   }, function () { needQuotes._busy = false; });
 }
@@ -7570,8 +6927,14 @@ function showTab(view) {
 
 /* Jump to the Trade Viewer with this trade picked. */
 function openTradeViewer(positionId) {
-  S.viewerPid = positionId;
+  S.viewerPid = viewerRootOf(positionId);
   showTab('viewer');
+}
+
+/* A covered call on assigned shares opens as the put's trade it belongs to. */
+function viewerRootOf(pid) {
+  var p = ((S.report && S.report.positions) || []).filter(function (x) { return x.positionId === pid; })[0];
+  return p && p.group && p.group.root ? p.group.root : pid;
 }
 
 /* The list of trades: every chain in the book, from the report. */
@@ -7580,7 +6943,22 @@ function viewerRows() {
   (S.trades || []).forEach(function (t) {
     if (t.seq && !t.seqClose) counts[t.positionId] = Math.max(counts[t.positionId] || 0, t.seqCount || 0);
   });
-  return ((S.report && S.report.positions) || []).map(function (p) {
+  /*
+   * An assigned trade is one row (build 2026-11-22): the put, the assignment
+   * and every covered call, until the shares are called away. Its calls are
+   * not trades of their own, so they are not listed separately.
+   */
+  var G_STATUS = { HOLDING: 'Assigned · holding', CALLED: 'Called away', SOLD: 'Shares sold' };
+  return ((S.report && S.report.positions) || []).filter(function (p) { return !p.groupMember; }).map(function (p) {
+    var g = p.group;
+    if (g) {
+      return {
+        positionId: p.positionId, underlying: p.underlying, optionType: 'PUT', assigned: true,
+        openDate: p.openDate, expiration: '', strike: g.assignedStrike, contracts: g.contracts,
+        rolls: p.rolls, isOpen: g.open, statusText: G_STATUS[g.status] || g.status,
+        net: g.net, returnPct: g.returnPct, weeklyReturnPct: g.weeklyReturnPct, lifeDays: g.lifeDays
+      };
+    }
     return {
       positionId: p.positionId, underlying: p.underlying, optionType: p.optionType,
       openDate: p.openDate, expiration: p.expiration || '', strike: p.strike, contracts: counts[p.positionId] || (p.rolls + 1),
@@ -7592,6 +6970,7 @@ function viewerRows() {
 }
 
 function renderViewer() {
+  if (S.viewerPid) S.viewerPid = viewerRootOf(S.viewerPid);
   var all = viewerRows();
   // Ticker picker from the trades actually in the book.
   var sel = $('#tvSymbol'), keep = sel.value;
@@ -7624,13 +7003,13 @@ function renderViewer() {
       onClick: function () { S.viewerPid = r.positionId; renderViewer(); }
     }, [
       el('td', { text: r.underlying }),
-      el('td', { text: r.optionType }),
+      el('td', { text: r.assigned ? 'PUT → CALL' : r.optionType }),
       el('td', { text: fmtDate(r.openDate) }),
       el('td', { text: r.expiration ? fmtDate(r.expiration) : '\u2014' }),
       el('td', { class: 'num', text: money(r.strike) }),
       el('td', { class: 'num', text: String(r.contracts) }),
       el('td', { class: 'num', text: r.rolls ? String(r.rolls) : '—' }),
-      el('td', {}, [el('span', { class: 'pill ' + (r.isOpen ? 'open' : 'flat'), text: r.statusText })]),
+      el('td', {}, [el('span', { class: 'pill ' + (r.assigned ? 'assigned' : r.isOpen ? 'open' : 'flat'), text: r.statusText })]),
       el('td', { class: 'num' + (r.net > 0 ? ' pos' : r.net < 0 ? ' neg' : ''), text: signedMoney(r.net) }),
       el('td', { class: 'num', text: signedPct(r.returnPct) }),
       el('td', { class: 'num', text: r.weeklyReturnPct === null ? '—' : signedPct(r.weeklyReturnPct) }),
@@ -7731,10 +7110,11 @@ function tvLivePoint(d, q) {
   for (var k = 0; k < t.length; k++) if (t[k].date === today) i = k;
   if (i === -1) {
     var last = t[t.length - 1] || {};
-    t.push({ date: today, close: null, closeSource: '', mark: null, markKind: '', strike: last.strike, costBasis: last.costBasis });
+    t.push({ date: today, close: null, closeSource: '', mark: null, markKind: '', strike: last.strike, costBasis: last.costBasis,
+             callStrike: last.callStrike, assignedStrike: last.assignedStrike, event: '', eventValue: null });
     i = t.length - 1;
     c.data.labels.push(fmtDate(today));
-    c.data.datasets.forEach(function (ds) { ds.data.push(ds.label === 'Strike' ? last.strike : ds.label === 'Cost basis' ? last.costBasis : null); });
+    c.data.datasets.forEach(function (ds) { ds.data.push(ds.$key ? (last[ds.$key] === undefined ? null : last[ds.$key]) : null); });
   }
   t[i].close = q.price; t[i].closeSource = 'LIVE'; t[i].closeTime = q.time || '';
   c.data.datasets[0].data[i] = q.price;
@@ -7813,13 +7193,19 @@ function targetTitle(rs, market) {
   var when = rs.estimatedAt ? ' · as of ' + fmtDate(localIso(rs.estimatedAt)) : '';
   if (rs.estimatedSource === 'YOURS') {
     return 'Estimated ' + money(rs.analystTarget) + ' — your value' + when +
-      (rs.auto && rs.auto.target ? ' · automatic: ' + money(rs.auto.target) : '');
+      (rs.auto && rs.auto.estimate ? ' · automatic (realistic): ' + money(rs.auto.estimate) + ', analysts\u2019 average ' + money(rs.auto.target) : '');
   }
   var r = rs.ratings || {};
   var buys = (r.strongBuy || 0) + (r.buy || 0), sells = (r.sell || 0) + (r.strongSell || 0);
-  var src = { NASDAQ: 'Nasdaq', FMP: 'Financial Modeling Prep', ALPHAVANTAGE: 'Alpha Vantage' }[rs.estimatedSource] || '';
-  return 'Estimated ' + money(rs.analystTarget) + ' (analysts’ average 12-month target' + (src ? ', via ' + src : '') + ')' +
-    (rs.auto && rs.auto.low && rs.auto.high ? ' · range ' + money(rs.auto.low) + '–' + money(rs.auto.high) : '') +
+  var src = { NASDAQ: 'Nasdaq', FMP: 'Financial Modeling Prep', ALPHAVANTAGE: 'Alpha Vantage', STOCKANALYSIS: 'StockAnalysis', FINVIZ: 'Finviz' }[rs.estimatedSource] || '';
+  // Build 2026-11-22: a REALISTIC figure, not the analysts' optimistic average.
+  var au = rs.auto || {};
+  var how = au.method === 'low-mid' ? 'halfway between the analysts\u2019 low (' + money(au.low) + ') and average (' + money(au.target) + ') targets'
+          : au.method === 'half-upside' ? 'half the upside from the ' + money(au.refClose) + ' close on ' + fmtDate(au.refDate) + ' to the analysts\u2019 average (' + money(au.target) + ')'
+          : 'the analysts\u2019 average 12-month target';
+  return 'Estimated ' + money(rs.analystTarget) + ' \u2014 realistic: ' + how + (src ? ', via ' + src : '') +
+    '. Re-worked each Monday.' +
+    (au.low && au.high ? ' · analysts\u2019 range ' + money(au.low) + '–' + money(au.high) : '') +
     (buys + (r.hold || 0) + sells ? ' · ' + buys + ' buy, ' + (r.hold || 0) + ' hold, ' + sells + ' sell' : '') + when;
 }
 
@@ -7834,7 +7220,8 @@ function openEstimateModal(sym) {
   var input = el('input', { type: 'text', inputmode: 'decimal', placeholder: 'e.g. 52.40',
     value: rs && rs.manual && rs.manual.target ? String(rs.manual.target) : '' });
   var auto = rs && rs.auto && rs.auto.target
-    ? 'Automatic: ' + money(rs.auto.target) + (rs.targetCheckedAt ? ' (' + fmtDate(localIso(rs.targetCheckedAt)) + ')' : '')
+    ? 'Automatic (realistic): ' + money(rs.auto.estimate || rs.auto.target) + ' from an analysts\u2019 average of ' + money(rs.auto.target) +
+      (rs.targetCheckedAt ? ' (' + fmtDate(localIso(rs.targetCheckedAt)) + ')' : '') + '.'
     : 'No automatic estimate for ' + sym + ' yet.';
   openModal('Estimated value — ' + sym, [el('div', { class: 'form-grid' }, [
     el('div', { class: 'field full' }, [
@@ -7902,7 +7289,8 @@ function paintViewerResearch(d) {
  * viewerTiles); any card he has not placed yet goes after, in default order.
  */
 var VIEWER_TILE_ORDER = ['contracts', 'status', 'expires', 'dte', 'earnings', 'market', 'itm', 'vsBasis', 'target',
-                         'premiumSold', 'boughtBack', 'net', 'return', 'weekly', 'basis'];
+                         'premiumSold', 'boughtBack', 'net', 'return', 'weekly', 'basis',
+                         'assigned', 'assignedAt', 'putCall', 'shares'];
 
 function tvTileHost(d, tile, tiles, sign) {
   var isOpen = d.status === 'Open';
@@ -7928,6 +7316,17 @@ function tvTileHost(d, tile, tiles, sign) {
        d.lifeWeeks ? 'over ' + d.lifeWeeks + (d.lifeWeeks === 1 ? ' week' : ' weeks') : '');
   tile('basis', d.costBasisActual ? 'Cost basis' : 'Cost basis if assigned',
        d.costBasis === null || d.costBasis === undefined ? '\u2014' : money(d.costBasis));
+  // An assigned trade's own cards (build 2026-11-22).
+  var a = d.assignment;
+  if (a) {
+    tile('assigned', 'Assigned', money(a.strike), '', fmtDate(a.date) + ' \u00b7 ' + num(a.shares, 0) + ' sh');
+    tile('assignedAt', 'Assigned At', a.atClose ? money(a.atClose) : '\u2014', '', 'close ' + fmtDate(a.atDate));
+    tile('putCall', 'Puts / calls', signedMoney(a.putNet) + ' / ' + signedMoney(a.callNet), '',
+         a.calls ? a.calls + (a.calls === 1 ? ' call' : ' calls') : 'no calls yet');
+    tile('shares', a.endDate ? (a.endKind === 'SOLD' ? 'Shares sold' : 'Called away') : 'Shares',
+         a.endDate ? signedMoney(a.sharePnl) : num(a.shares, 0) + ' held', a.endDate ? sign(a.sharePnl) : '',
+         a.endDate ? fmtDate(a.endDate) + ' at ' + money(a.endPrice) + ' \u00b7 total ' + signedMoney(a.total) : 'until called away');
+  }
   var saved = (S.settings.viewerTiles || []).filter(function (k) { return tiles[k]; });
   var order = saved.concat(VIEWER_TILE_ORDER.filter(function (k) { return saved.indexOf(k) === -1; }));
   return el('div', { class: 'tiles', id: 'tvTiles', style: 'margin-bottom:0' }, order.map(function (k) { return tiles[k]; }));
@@ -7968,7 +7367,13 @@ function paintViewerItm(d) {
   needQuotes([sym]);
   paintViewerMarket(d, price, src, live);
   if (!(price > 0) || !(cur.strike > 0)) { box.appendChild(document.createTextNode('\u2014')); return; }
-  var past = d.optionType === 'CALL' ? price - cur.strike : cur.strike - price;
+  if (d.holding && cur.ended !== 'Open') {
+    box.appendChild(document.createTextNode('\u2014'));
+    box.appendChild(el('span', { class: 'tile-note', text: ' holding shares, no call open \u00b7 ' + money(price) + ' ' + src }));
+    return;
+  }
+  // A call is in the money ABOVE its strike, a put below (build 2026-11-22: by the contract running now).
+  var past = (cur.optionType || d.optionType) === 'CALL' ? price - cur.strike : cur.strike - price;
   var p = past / price;
   if (past > 0) {
     box.classList.add('neg');
@@ -8018,11 +7423,16 @@ function drawTradeSequence(d) {
 
   var summary = el('div', { class: 'panel' }, [
     el('div', { class: 'panel-body' }, [
-      el('p', { class: 'tv-title' }, [d.underlying + ' ' + type + ' · ' + strikes + ' ',
+      el('p', { class: 'tv-title' }, [d.underlying + ' ' + (d.assignment ? 'put \u2192 assigned \u2192 covered calls' : type) + ' · ' +
+        (d.assignment ? money(d.assignment.strike) + ' assigned' : strikes) + ' ',
         el('button', { class: 'btn btn-xs', title: 'This trade on the candle chart, with Bollinger Bands and RSI',
           onClick: function () { openChart(d.underlying, { positionId: S.viewerPid || d.positionId }); } }, ['Open chart'])]),
       el('p', { class: 'tv-sub', text: 'First sold ' + fmtDate(d.firstOpened) +
-        (d.lastClosed ? ' · finished ' + fmtDate(d.lastClosed) : ' · still open') +
+        (d.assignment ? ' · assigned ' + fmtDate(d.assignment.date) + ' at ' + money(d.assignment.strike) +
+          (d.assignment.atClose ? ' (closed ' + money(d.assignment.atClose) + ' on ' + fmtDate(d.assignment.atDate) + ')' : '') : '') +
+        (d.assignment && d.assignment.endDate ? ' · ' + (d.assignment.endKind === 'SOLD' ? 'shares sold ' : 'called away ') +
+          fmtDate(d.assignment.endDate) + ' at ' + money(d.assignment.endPrice) : '') +
+        (d.lastClosed ? ' · finished ' + fmtDate(d.lastClosed) : d.holding ? ' · still holding the shares' : ' · still open') +
         ' · ' + d.contracts + (d.contracts === 1 ? ' contract' : ' contracts') +
         ', ' + d.rolls + (d.rolls === 1 ? ' roll' : ' rolls') +
         (d.pendingBuybacks ? ' · ' + d.pendingBuybacks + ' buy-back price still to import, so the figures read high' : '') }),
@@ -8037,7 +7447,9 @@ function drawTradeSequence(d) {
   // Strike against the market, contract by contract.
   var chartPanel = el('div', { class: 'panel' }, [
     el('div', { class: 'panel-head' }, [el('h2', { text: 'Strike, market and cost basis' }),
-      el('span', { class: 'panel-sub', text: 'daily closing price, your marks at each sale and roll, the strike, and what a share would cost if assigned' })]),
+      el('span', { class: 'panel-sub', text: d.assignment
+        ? 'daily close, your marks, the put strike, the assigned strike, each covered call\u2019s strike (green dots) and your cost basis'
+        : 'daily closing price, your marks at each sale and roll, the strike, and what a share would cost if assigned' })]),
     el('div', { class: 'panel-body' }, [
       d.priceNote ? el('p', { class: 'hint', style: 'margin:0 0 8px', text: d.priceNote }) : null,
       el('div', { class: 'tv-chart' }, [el('canvas', { id: 'canvas_tradeViewer' })])
@@ -8053,7 +7465,7 @@ function drawTradeSequence(d) {
     return el('tr', {}, [
       el('td', { class: 'num' }, [el('span', { class: 'seq' + (r.n === 1 ? ' first' : ''), text: r.n === 1 ? '1 first' : String(r.n) })]),
       el('td', { text: fmtDate(r.opened) }),
-      el('td', { class: 'num', text: money(r.strike) }),
+      el('td', { class: 'num' }, [money(r.strike), d.assignment ? el('small', { class: 'muted', text: ' ' + String(r.optionType || '').toLowerCase() }) : null]),
       el('td', { text: fmtDate(r.expiration) }),
       el('td', { class: 'num', text: num(r.qty, 0) }),
       el('td', { class: 'num', title: r.n === 1 ? 'Your Start Mark when you sold it' : 'Your mark when you rolled into it',
@@ -8075,7 +7487,8 @@ function drawTradeSequence(d) {
       el('td', { class: 'num', text: signedMoney(r.runningNet) }),
       el('td', { class: 'num', text: signedPct(r.runningReturnPct) }),
       el('td', { class: 'num', text: r.costBasis === null ? '—' : money(r.costBasis) }),
-      el('td', {}, [el('span', { class: 'pill ' + (r.ended === 'Open' ? 'open' : r.ended === 'Expired' ? 'win' : 'flat'), text: r.ended })])
+      el('td', {}, [el('span', { class: 'pill ' + (r.ended === 'Open' ? 'open' : r.ended === 'Expired' ? 'win'
+        : (r.ended === 'Assigned' || r.ended === 'Called away') ? 'assigned' : 'flat'), text: r.ended })])
     ]);
   }));
   host.appendChild(el('div', { class: 'panel' }, [
@@ -8165,11 +7578,29 @@ function drawStrikeVsMarket(d) {
           pointBorderWidth: t.map(function (x) { return x.closeSource === 'LIVE' ? 2 : 0; }) },
         { label: 'Your marks', data: t.map(function (x) { return x.mark; }), showLine: false,
           borderColor: accent, backgroundColor: accent, pointRadius: 6, pointHoverRadius: 8, pointStyle: 'rectRot', order: 1 },
-        { label: 'Strike', data: t.map(function (x) { return x.strike; }), borderColor: YELLOW, backgroundColor: YELLOW, borderWidth: 2,
-          borderDash: [6, 4], stepped: 'before', pointRadius: 0, spanGaps: true, order: 4 },
-        { label: 'Cost basis', data: t.map(function (x) { return x.costBasis; }), borderColor: muted, backgroundColor: muted, borderWidth: 2,
+        { label: d.assignment ? 'Put strike' : 'Strike', $key: 'strike', data: t.map(function (x) { return x.strike; }), borderColor: YELLOW, backgroundColor: YELLOW, borderWidth: 2,
+          borderDash: [6, 4], stepped: 'before', pointRadius: 0, spanGaps: !d.assignment, order: 4 },
+        { label: 'Cost basis', $key: 'costBasis', data: t.map(function (x) { return x.costBasis; }), borderColor: muted, backgroundColor: muted, borderWidth: 2,
           borderDash: [2, 3], stepped: 'before', pointRadius: 0, spanGaps: true, order: 5 }
-      ]
+      ].concat(d.assignment ? [
+        /*
+         * The assigned trade (build 2026-11-22): the strike the shares were
+         * bought at, for as long as they are held; each covered call's strike
+         * as a green dotted line from its sale to its expiry (a gap between
+         * calls is a week with none written); and the two moments that bound
+         * the trade -- assigned (amber triangle) and called away (green star).
+         */
+        { label: 'Assigned strike', $key: 'assignedStrike', data: t.map(function (x) { return x.assignedStrike; }), borderColor: '#f0883e', backgroundColor: '#f0883e',
+          borderWidth: 2, stepped: 'before', pointRadius: 0, spanGaps: false, order: 6 },
+        { label: 'Call strike', $key: 'callStrike', data: t.map(function (x) { return x.callStrike; }), borderColor: pos, backgroundColor: pos,
+          borderWidth: 2.5, borderDash: [2, 4], stepped: 'before', pointRadius: 0, spanGaps: false, order: 7 },
+        { label: 'Assigned', $event: 'assigned', data: t.map(function (x) { return x.event === 'assigned' ? x.eventValue : null; }), showLine: false,
+          borderColor: '#f0883e', backgroundColor: '#f0883e', pointStyle: 'triangle', pointRadius: 10, pointHoverRadius: 12, order: 0 }
+      ].concat(d.assignment.endDate ? [
+        { label: d.assignment.endKind === 'SOLD' ? 'Shares sold' : 'Called away', $event: 'called',
+          data: t.map(function (x) { return x.event === 'called' || x.event === 'sold' ? x.eventValue : null; }), showLine: false,
+          borderColor: pos, backgroundColor: pos, pointStyle: 'star', pointRadius: 11, pointHoverRadius: 13, borderWidth: 2, order: 0 }
+      ] : []) : [])
     },
     options: baseOptions({
       // Drawn as it is: an animation here started from the size the canvas had
@@ -8186,6 +7617,9 @@ function drawStrikeVsMarket(d) {
               if (c.parsed.y === null || c.parsed.y === undefined) return null;
               var x = t[c.dataIndex];
               if (c.datasetIndex === 1) return (KIND[x.markKind] || 'Your mark') + ' ' + money(c.parsed.y);
+              if (c.dataset.$event === 'assigned') return 'Assigned ' + num(d.assignment.shares, 0) + ' shares at ' + money(c.parsed.y) +
+                (d.assignment.atClose ? ' (closed ' + money(d.assignment.atClose) + ' the day before)' : '');
+              if (c.dataset.$event === 'called') return c.dataset.label + ' at ' + money(c.parsed.y) + ' (' + signedMoney(d.assignment.sharePnl) + ' on the shares)';
               if (c.datasetIndex === 0) {
                 var p = prevClose(c.dataIndex);
                 return (x.closeSource === 'LIVE' ? (marketOpenNow() ? 'Live ' : 'Today ') : 'Close ') + money(c.parsed.y) +
@@ -8739,20 +8173,28 @@ function renderHoldings() {
   var body = $('#holdingsTable tbody');
   body.innerHTML = '';
 
+  needQuotes(live.map(function (h) { return h.symbol; }));
   live.forEach(function (h) {
+    var px = holdingPrice(h);
+    var unreal = px.price && h.costBasis !== null ? Math.round((px.price - h.costBasis) * h.shares * 100) / 100 : null;
+    var chain = (h.chains || [])[0];
     body.appendChild(el('tr', { style: 'cursor:pointer', title: 'Covered-call maths for ' + h.symbol,
                                 onClick: function () { showCoveredCalls(h.symbol); } }, [
-      el('td', { text: h.symbol }),
+      el('td', {}, [chain ? el('a', { href: '#', title: 'Open this trade in the Trade Viewer — the put, the assignment and every call',
+        style: 'color:var(--accent);text-decoration:none;font-weight:600',
+        onClick: function (e) { e.preventDefault(); e.stopPropagation(); openTradeViewer(chain); } }, [h.symbol]) : h.symbol]),
       el('td', { class: 'num', text: num(h.shares, 0) }),
       el('td', { class: 'num', text: money(h.assignedStrike) }),
+      el('td', { class: 'num', title: h.assignedAtDate ? 'Close on ' + fmtDate(h.assignedAtDate) + ', the business day before the assignment (' + fmtDate(h.acquiredAt) + ')' : '',
+                 text: h.assignedAtClose ? money(h.assignedAtClose) : '—' }),
       el('td', { class: 'num' + (h.putPremiumCredit > 0 ? ' pos' : ''), text: signedMoney(h.putPremiumCredit) }),
       el('td', { class: 'num' + (h.callPremiumCredit > 0 ? ' pos' : h.callPremiumCredit < 0 ? ' neg' : ''),
                  text: h.callPremiumCredit ? signedMoney(h.callPremiumCredit) : '—' }),
-      el('td', { class: 'num', style: 'font-weight:600', text: money(h.costBasis) }),
-      el('td', { class: 'num', text: money(h.breakEvenPrice) }),
-      el('td', { class: 'num', text: h.markPrice ? money(h.markPrice) : '—' }),
-      el('td', { class: 'num' + (h.unrealised > 0 ? ' pos' : h.unrealised < 0 ? ' neg' : ''),
-                 text: h.unrealised === null ? '—' : signedMoney(h.unrealised) })
+      el('td', { class: 'num', style: 'font-weight:600', title: 'Also your break-even: the strike less ' + money(h.totalCredited) + ' of premium over ' + num(h.shares, 0) + ' shares',
+                 text: money(h.costBasis) }),
+      el('td', { class: 'num', title: px.label, text: px.price ? money(px.price) : '—' }),
+      el('td', { class: 'num' + (unreal > 0 ? ' pos' : unreal < 0 ? ' neg' : ''),
+                 text: unreal === null ? '—' : signedMoney(unreal) })
     ]));
   });
 }
@@ -11284,7 +10726,7 @@ function openTypeEstimates() {
         (rs.estimatedAt ? ', ' + fmtDate(localIso(rs.estimatedAt)) : '')
       : 'none yet';
     var start = rs.manual && rs.manual.target ? String(rs.manual.target) : '';
-    inputs[sym] = el('input', { type: 'text', inputmode: 'decimal', placeholder: rs.auto && rs.auto.target ? String(rs.auto.target) : '', value: start });
+    inputs[sym] = el('input', { type: 'text', inputmode: 'decimal', placeholder: rs.auto && (rs.auto.estimate || rs.auto.target) ? String(rs.auto.estimate || rs.auto.target) : '', value: start });
     inputs[sym]._start = start;
     return el('div', { class: 'est-row' }, [
       el('b', { text: sym }), el('span', { class: 'hint', text: cur }), inputs[sym]
