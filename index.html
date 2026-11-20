@@ -576,6 +576,17 @@ a.btn.is-wait { opacity: .6; cursor: progress; }
  */
 #yearTargetTable td .cell-edit { width: 116px; }
 .actual-cell { white-space: nowrap; }
+/*
+ * Build 2026-11-23: Actual and Of target show the Value and the Balance (at
+ * market) one above the other, each with its own small label, so the pair
+ * reads the same way the header's Value / Balance do.
+ */
+.dual-cell { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
+.dual-line { display: flex; align-items: center; justify-content: flex-end; gap: 6px; white-space: nowrap; }
+.dual-lbl { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; min-width: 48px; text-align: right; }
+.dual-line .mini-prog { gap: 6px; }
+/* Inside a flex line the bar would shrink to nothing: give it a fixed track. */
+.dual-line .mini-prog-bar { flex: 0 0 60px; }
 
 /* ----------------------------------------------------------------- modal */
 .modal-backdrop {
@@ -1624,8 +1635,8 @@ body.ch-side-off #chListToggle { opacity: .7; }
         <table class="data" id="yearTargetMiniTable">
           <thead><tr>
             <th class="num">Year</th><th class="num">Target</th>
-            <th class="num">Actual</th>
-            <th class="num">Of target</th><th class="num">Year progress</th>
+            <th class="num" title="Value (cash + assigned shares at cost) and Balance (cash + shares at the market)">Actual</th>
+            <th class="num" title="Today's Value and today's Balance, each against the year's target">Of target</th><th class="num">Year progress</th>
             <th class="num">To go</th>
           </tr></thead>
           <tbody></tbody>
@@ -1990,8 +2001,8 @@ body.ch-side-off #chListToggle { opacity: .7; }
         <table class="data" id="yearTargetTable">
           <thead><tr>
             <th class="num">Year</th><th class="num">Target</th>
-            <th class="num" title="Balance at 31 December, or today's balance for the year we are in">Actual</th>
-            <th class="num">Of target</th><th class="num">Year progress</th>
+            <th class="num" title="Value (cash + assigned shares at cost) and Balance (cash + shares at the market): at 31 December, or today for the year we are in">Actual</th>
+            <th class="num" title="Today's Value and today's Balance, each against the year's target">Of target</th><th class="num">Year progress</th>
             <th class="num">Needs</th><th class="num">To go</th>
             <th>Source</th><th></th>
           </tr></thead>
@@ -7640,7 +7651,7 @@ function loadQuotes(symbols) {
     if (!res || !res.ok) return;
     (symbols || []).forEach(function (sym) { S.quotes[sym] = res.quotes[sym] || { price: null }; });
     renderOpenPositions();
-    renderHeaderFigures(); renderHoldings();
+    renderHeaderFigures(); renderHoldings(); paintYearBalances();
     if (S.viewerData) { paintViewerItm(S.viewerData); paintViewerResearch(S.viewerData); }
   }, function () { needQuotes._busy = false; });
 }
@@ -8322,11 +8333,12 @@ function drawStrikeVsMarket(d) {
         { label: 'Call strike', $key: 'callStrike', data: t.map(function (x) { return x.callStrike; }), borderColor: pos, backgroundColor: pos,
           borderWidth: 2.5, borderDash: [2, 4], stepped: 'before', pointRadius: 0, spanGaps: false, order: 7 },
         { label: 'Assigned', $event: 'assigned', data: t.map(function (x) { return x.event === 'assigned' ? x.eventValue : null; }), showLine: false,
-          borderColor: '#f0883e', backgroundColor: '#f0883e', pointStyle: 'triangle', pointRadius: 10, pointHoverRadius: 12, order: 0 },
+          borderColor: '#f0883e', backgroundColor: '#f0883e', pointStyle: 'triangle', pointRadius: 10, pointHoverRadius: 12, order: 0 }
+      ].concat(d.assignment.endDate ? [
         { label: d.assignment.endKind === 'SOLD' ? 'Shares sold' : 'Called away', $event: 'called',
           data: t.map(function (x) { return x.event === 'called' || x.event === 'sold' ? x.eventValue : null; }), showLine: false,
           borderColor: pos, backgroundColor: pos, pointStyle: 'star', pointRadius: 11, pointHoverRadius: 13, borderWidth: 2, order: 0 }
-      ] : [])
+      ] : []) : [])
     },
     options: baseOptions({
       // Drawn as it is: an animation here started from the size the canvas had
@@ -10354,7 +10366,8 @@ function renderYearTargets() {
   var rows = data.targets || [];
 
   $('#yearTargetSub').textContent = rows.length
-    ? rows.length + ' year' + (rows.length === 1 ? '' : 's') + ' · balance ' + money(data.balance)
+    ? rows.length + ' year' + (rows.length === 1 ? '' : 's') + ' · value ' + money(data.balance) +
+      ' · balance ' + money(yearBalanceNow(data))
     : 'None yet';
 
   var body = $('#yearTargetTable tbody');
@@ -10373,7 +10386,7 @@ function renderYearTargets() {
       el('td', { class: 'num', text: String(t.year) }),
       el('td', { class: 'num' }, [yearAmountCell(t)]),
       el('td', { class: 'num' }, [yearActualCell(t)]),
-      el('td', { class: 'num' }, [progressCell(t.percentOfTarget)]),
+      el('td', { class: 'num' }, [yearOfTargetCell(t)]),
       el('td', { class: 'num' }, [yearProgressCell(t)]),
       el('td', { class: 'num', title: 'The climb this year has to make from the year before',
                  text: signedMoney(t.neededInYear) }),
@@ -10396,22 +10409,91 @@ function renderYearTargets() {
 }
 
 /*
- * Actual, against the target.
+ * Actual, against the target -- as the Value AND the Balance (build 2026-11-23).
  *
- * A finished year shows where the account closed on 31 December; the current
- * year shows today's balance, marked "so far" because it is still moving; a
- * year not yet begun shows a dash. Underneath, how far over or under the
- * target that is -- the sign is in the number, not only the colour.
+ *   Value    cash plus assigned shares at what they cost (being assigned
+ *            does not move it)
+ *   Balance  cash plus those shares at the market
+ *
+ * A finished year shows where each closed on 31 December; the current year
+ * shows today's (the Balance moving with the live price, as the header's
+ * does); a year not yet begun shows a dash.
  */
+function yearBalanceNow(data) {
+  var mb = marketBalanceNow();
+  if (mb.value !== null && mb.value !== undefined) return mb.value;
+  data = data || S.yearTargets || {};
+  return data.marketBalance !== undefined ? data.marketBalance : data.balance;
+}
+
+/* The Balance figure for one row: live for the year we are in, the server's for a finished one. */
+function yearRowBalance(t) {
+  if (t.actualBalance === null || t.actualBalance === undefined) {
+    return t.actual === null || t.actual === undefined ? null : t.actual;
+  }
+  return t.actualFinal ? t.actualBalance : yearBalanceNow();
+}
+
+function dualLine(label, child, title) {
+  return el('div', { class: 'dual-line', title: title || '' }, [el('span', { class: 'dual-lbl', text: label }), child]);
+}
+
 function yearActualCell(t) {
   if (t.actual === null || t.actual === undefined) {
-    return el('span', { class: 'muted', title: 'This year has not started yet', text: '\u2014' });
+    return el('span', { class: 'muted', title: 'This year has not started yet', text: '—' });
   }
-  // Just the figure: To go already says how far over or under it is.
-  var title = t.actualFinal
-    ? 'Balance at 31 December ' + t.year
-    : 'Balance today, with the year still running';
-  return el('span', { class: 'actual-cell', title: title, text: money(t.actual, 0) });
+  var when = t.actualFinal ? 'at 31 December ' + t.year : 'today, with the year still running';
+  var bal = yearRowBalance(t);
+  // Just the figures: To go already says how far over or under the Value is.
+  return el('div', { class: 'dual-cell actual-cell' }, [
+    dualLine('Value', el('span', { text: money(t.actual, 0) }),
+      'Value ' + when + ': cash plus assigned shares at what they cost'),
+    dualLine('Balance', el('span', { 'data-yt-bal': t.actualFinal ? null : 'actual', text: money(bal, 0) }),
+      'Balance ' + when + ': cash plus shares at the market')
+  ]);
+}
+
+/*
+ * Of target, both ways: today's Value and today's Balance against the
+ * year's figure. Same for every row (a distant year says how far off it
+ * still is), as the single figure always was.
+ */
+function yearOfTargetCell(t) {
+  var bal = yearBalanceNow();
+  var balPct = t.amount ? bal / t.amount : (t.percentOfTargetBalance || 0);
+  var barB = progressCell(balPct);
+  barB.setAttribute('data-yt-balpct', String(t.amount || 0));
+  return el('div', { class: 'dual-cell' }, [
+    dualLine('Value', progressCell(t.percentOfTarget),
+      'Value ' + money(S.yearTargets ? S.yearTargets.balance : 0) + ' is ' + pct(t.percentOfTarget || 0) + ' of the ' + money(t.amount, 0) + ' target'),
+    dualLine('Balance', barB,
+      'Balance ' + money(bal) + ' is ' + pct(balPct) + ' of the ' + money(t.amount, 0) + ' target')
+  ]);
+}
+
+/*
+ * Live quotes move the Balance; repaint just those figures (re-rendering the
+ * Goals table would throw away a target being typed).
+ */
+function paintYearBalances() {
+  var data = S.yearTargets;
+  if (!data || !(data.targets || []).length) return;
+  var bal = yearBalanceNow(data);
+  $$('[data-yt-bal="actual"]').forEach(function (n) { n.textContent = money(bal, 0); });
+  $$('[data-yt-balpct]').forEach(function (n) {
+    var amount = Number(n.getAttribute('data-yt-balpct')) || 0;
+    if (!amount) return;
+    var v = bal / amount;
+    var fill = n.querySelector('.mini-prog-fill'), num_ = n.querySelector('.mini-prog-num');
+    if (fill) fill.style.width = (Math.max(0, Math.min(1, v)) * 100).toFixed(1) + '%';
+    if (num_) num_.textContent = pct(v);
+    if (n.parentNode) n.parentNode.title = 'Balance ' + money(bal) + ' is ' + pct(v) + ' of the ' + money(amount, 0) + ' target';
+  });
+  var sub = $('#yearTargetSub');
+  if (sub && data.targets.length) sub.textContent = data.targets.length + ' year' + (data.targets.length === 1 ? '' : 's') +
+    ' · value ' + money(data.balance) + ' · balance ' + money(bal);
+  var mini = $('#yearTargetMiniSub');
+  if (mini) mini.textContent = 'Value ' + money(data.balance) + ' · Balance ' + money(bal);
 }
 
 /** A percentage with a bar behind it, so a column of them is scannable. */
@@ -10476,7 +10558,8 @@ function yearProgressCell(t) {
   var lines = [
     pct(t.yearProgress) + ' of ' + t.year + ' has gone' + (t.yearProgress < 1 ? ' (' + dayOfYearText(t.year) + ', as of ' +
       new Date().toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) + ').' : '.'),
-    pct(t.percentOfTarget) + ' of the target is reached.'
+    pct(t.percentOfTarget) + ' of the target is reached on Value' +
+      (t.amount ? ', ' + pct(yearBalanceNow() / t.amount) + ' on Balance.' : '.')
   ];
   if (t.pace !== null) {
     lines.push(ahead
@@ -10540,7 +10623,7 @@ function renderYearTargetsMini() {
   var shown = rows.filter(function (t) { return t.year >= data.thisYear; }).slice(0, 5);
   if (!shown.length) shown = rows.slice(-5);
 
-  $('#yearTargetMiniSub').textContent = 'Balance ' + money(data.balance);
+  $('#yearTargetMiniSub').textContent = 'Value ' + money(data.balance) + ' · Balance ' + money(yearBalanceNow(data));
   var body = $('#yearTargetMiniTable tbody');
   body.innerHTML = '';
   shown.forEach(function (t) {
@@ -10548,7 +10631,7 @@ function renderYearTargetsMini() {
       el('td', { class: 'num', text: String(t.year) }),
       el('td', { class: 'num', text: money(t.amount, 0) }),
       el('td', { class: 'num' }, [yearActualCell(t)]),
-      el('td', { class: 'num' }, [progressCell(t.percentOfTarget)]),
+      el('td', { class: 'num' }, [yearOfTargetCell(t)]),
       el('td', { class: 'num' }, [yearProgressCell(t)]),
       el('td', { class: 'num', text: t.reached ? 'Reached' : money(t.remaining, 0) })
     ]));
